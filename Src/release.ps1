@@ -1,91 +1,121 @@
-# Copyright (c) 2019, Intel Corporation
+# Copyright (C) 2024 Intel Corporation
 #
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
+# Redistribution and use in source and binary forms, with or without modification,
+# are permitted provided that the following conditions are met:
 #
-#    * Redistributions of source code must retain the above copyright notice,
-#      this list of conditions and the following disclaimer.
-#    * Redistributions in binary form must reproduce the above copyright
-#      notice, this list of conditions and the following disclaimer in the
-#      documentation and/or other materials provided with the distribution.
-#    * Neither the name of Intel Corporation nor the names of its contributors
-#      may be used to endorse or promote products derived from this software
-#      without specific prior written permission.
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+# 3. Neither the name of the copyright holder nor the names of its contributors
+#    may be used to endorse or promote products derived from this software
+#    without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+# BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+# OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+# OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+# OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+# EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
 
-trap {
-	Set-Location -Path $pwd
+param (
+	[Parameter(Mandatory=$false)]
+	[int]$vs = 2017,
+	[Parameter(Mandatory=$false)]
+	[String]$buildTools
+)
+
+function Invoke-VS-Env {
+	param(
+		[int] $vs
+	)
+	$scriptName = $(
+	Get-Childitem -Path "C:\Program Files*\Microsoft Visual Studio\$vs\*\VC\Auxiliary\Build\vcvars64.bat" -Recurse |
+			Select-Object FullName |
+			Select-Object -Last 1
+	).FullName
+
+	if ([string]::IsNullOrWhiteSpace($scriptName)) {
+		Write-Error "Environment for Visual Studio $vs was not found"
+		exit 1
+	}
+	# Run vcvars64 and get environment variables
+	$cmdline = """$scriptName"" & set"
+	& cmd.exe /c $cmdline | Foreach-Object {
+		if ($_ -match "^(.*?)=(.*)$")
+		{
+			Set-Content "env:\$($matches[1])" $matches[2]
+		}
+	}
+}
+
+Invoke-VS-Env $vs
+
+New-Item -ItemType Directory -Force -Path ${PSScriptRoot}\Build
+$cwd = Get-Location
+
+$generator = "Visual Studio 15 2017"
+if ($vs -eq 2019) {
+	$generator = "Visual Studio 16 2019"
+}
+
+if ($vs -eq 2022) {
+	$generator = "Visual Studio 17 2022"
+}
+
+$cmakeGenerateArguments = @('-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_CONFIGURATION_TYPES="Release"', '-DBUILD_TEE=ON', '-G', $generator, '-A', 'x64')
+
+if (![string]::IsNullOrWhiteSpace($buildTools)) {
+	$cmakeGenerateArguments += "-T$($buildTools)"
+}
+
+if ($vs -eq 2017) {
+	# workaround for old cmake that is included in VS2017 and doesn't support -B and -S command line arguments.
+	Set-Location -Path ${PSScriptRoot}\Build\
+	$cmakeGenerateArguments += ${PSScriptRoot}
+}
+else {
+	$cmakeGenerateArguments += @( '-B', "${PSScriptRoot}\Build", '-S', ${PSScriptRoot})
+}
+
+Write-Host "Running CMake with arguments: $cmakeGenerateArguments"
+& cmake $cmakeGenerateArguments
+if($LastExitCode -ne 0)
+{
+	Write-Error "CMake generation failed: $LastExitCode"
+	Set-Location -Path $cwd
 	exit $LastExitCode
 }
 
-$vsBasePath = "C:\Program Files (x86)\Microsoft Visual Studio\" # base path for VS
-
-
-$anyVs2017Pattern = "$vsBasePath\2017\*"
-$cmake = $(
-	Get-Childitem -Path "$anyVs2017Pattern\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -Recurse |
-	Select-Object FullName |
-	Select-Object -Last 1
-).FullName
-
-$msbuild = $(
-	Get-Childitem -Path "$anyVs2017Pattern\MSBuild\*\Bin\MSBuild.exe" -Include MSBuild.exe -Recurse |
-	Select-Object FullName |
-	Where-Object { $_.FullName -notlike "*amd*" } |
-	Select-Object -Last 1
-).FullName
-
-# Start workarounds
-
-$devenv = $(
-	Get-Childitem -Path "$anyVs2017Pattern\Common7\IDE\devenv.com" -Recurse |
-	Select-Object FullName |
-	Select-Object -Last 1
-).FullName
-
-
-$env:Path += ";$cmake;$msbuild"
-$env:CMAKE_VS_MSBUILD_COMMAND = "$msbuild"
-$env:CMAKE_VS_DEVENV_COMMAND = "$devenv"
-
-# End workarounds
-
-$cwd = Get-Location
-New-Item -ItemType Directory -Force -Path ${PSScriptRoot}\Build\solution
-Set-Location -Path ${PSScriptRoot}\Build\solution
-
-$cmakeArguments = @('-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_CONFIGURATION_TYPES="Release"', '-DATTESTATION_APP=ON', '-G', 'Visual Studio 15 2017 Win64', ${PSScriptRoot})
-
-Write-Host "--------------"
-Write-Host "Command: $cmake $cmakeArguments"
-& $cmake $cmakeArguments
-Write-Host "--------------"
-
+Write-Host "Running MSBuild"
+$cmakeBuildlArguments = @('--build', "${PSScriptRoot}\Build", "--config", "Release", "--target", "install")
+& cmake $cmakeBuildlArguments
 if($LastExitCode -ne 0)
 {
-    Set-Location -Path $cwd
-    exit $LastExitCode
+    Write-Error "CMake build failed: $LastExitCode"
+	Set-Location -Path $cwd
+	exit $LastExitCode
 }
 
-Write-Host "--------------"
-Write-Host "Command: $msbuild ${PSScriptRoot}\Build\solution\SgxEcdsaAttestation.sln"
-& $msbuild ${PSScriptRoot}\Build\solution\SgxEcdsaAttestation.sln 
-
+Write-Host "Running tests"
+$ctestArguments = @("-C", "Release", "--test-dir", "${PSScriptRoot}\Build")
+& ctest $ctestArguments
 if($LastExitCode -ne 0)
 {
-    Set-Location -Path $cwd
-    exit $LastExitCode
+	Write-Error "CTest failed: $LastExitCode"
+	Set-Location -Path $cwd
+	exit $LastExitCode
 }
-Write-Host "--------------"
 
 Set-Location -Path $cwd
+Write-Host "Finished successfully"
