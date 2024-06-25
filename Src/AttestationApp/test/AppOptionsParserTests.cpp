@@ -175,7 +175,7 @@ TEST_F(AppOptionsParserTests, ReturnsGivenValuesWhenParametersPassedPrintsNothin
     EXPECT_EQ(options->tcbInfoFile, tcbInfo);
     EXPECT_EQ(options->tcbSigningChainFile, tcbSignChain);
     EXPECT_EQ(options->quoteFile, quote);
-    EXPECT_EQ(options->expirationDate, std::stol(expirationDate));
+    EXPECT_EQ(options->expirationDate, std::stoll(expirationDate));
 }
 
 TEST_F(AppOptionsParserTests, ReturnsNothingWhenHelpTypedPrintsHelp)

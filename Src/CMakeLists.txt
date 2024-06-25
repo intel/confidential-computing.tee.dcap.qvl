@@ -166,12 +166,14 @@ option(HUNTER_KEEP_PACKAGE_SOURCES "Keep third party sources" ON)
 
 include("${CMAKE_CURRENT_LIST_DIR}/ThirdParty/hunter/HunterGate.cmake")
 HunterGate(
-		URL "https://github.com/cpp-pm/hunter/archive/v0.25.3.tar.gz"
-		SHA1 "0dfbc2cb5c4cf7e83533733bdfd2125ff96680cb"
+		URL "https://github.com/cpp-pm/hunter/archive/v0.25.6.tar.gz"
+		SHA1 "69e4a05bd514bb05cb2c5aa02ce8ac420516aaf7"
 		FILEPATH "${CMAKE_SOURCE_DIR}/ThirdParty/hunter/config.cmake"
 )
 
 project(SgxEcdsaAttestation)
+
+include(CTest)
 
 message("HUNTER_GATE_ROOT: ${HUNTER_GATE_ROOT}")
 file(COPY "${CMAKE_SOURCE_DIR}/ThirdParty/hunter/openssl/hunter.cmake" DESTINATION "${HUNTER_ROOT}/_Base/Download/Hunter/0.25.3/0dfbc2c/Unpacked/cmake/projects/OpenSSL/")
@@ -289,7 +291,8 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 			"/NXCOMPAT"
 			"/FORCE:MULTIPLE"
 			)
-	if(NOT "${CMAKE_GENERATOR}" MATCHES "(Win64|IA64)")
+
+	if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 		set(COMMON_LINKER_FLAGS "${COMMON_LINKER_FLAGS}" "/SAFESEH") # valid for x86 build only
 	endif()
 
@@ -346,19 +349,6 @@ add_custom_target(install_${PROJECT_NAME}
 		COMMENT "Installing ${PROJECT_NAME}")
 
 if (BUILD_TESTS)
-	if(UNIX)
-		add_custom_target(runTests
-				COMMAND cd ${QVL_DIST_DIR}/bin &&
-				LD_LIBRARY_PATH=../lib ./AttestationCommons_UT --gtest_output="xml:../results/AttestationCommons_UTResults.xml" &&
-				LD_LIBRARY_PATH=../lib ./AttestationParsers_UT --gtest_output="xml:../results/AttestationParsers_UTResults.xml" &&
-				LD_LIBRARY_PATH=../lib ./AttestationParsers_IT --gtest_output="xml:../results/AttestationParsers_ITResults.xml" &&
-				LD_LIBRARY_PATH=../lib ./AttestationLibrary_UT --gtest_output="xml:../results/AttestationLibrary_UTResults.xml" &&
-				LD_LIBRARY_PATH=../lib ./AttestationLibrary_IT --gtest_output="xml:../results/AttestationLibrary_ITResults.xml" &&
-				LD_LIBRARY_PATH=../lib ./AttestationApp_UT --gtest_output="xml:../results/AttestationApp_UTResults.xml" &&
-				cd ${CMAKE_SOURCE_DIR}
-				DEPENDS install_${PROJECT_NAME})
-	endif()
-
 	if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
 		if(UNIX)
             include(ProcessorCount)
