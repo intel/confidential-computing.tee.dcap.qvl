@@ -30,17 +30,18 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
-type=release
-
+type=Release
+dir=cmake-build-release
 if [ "$1" = "debug" ]; then
-    type=debug
+    type=Debug
+    dir=cmake-build-debug
 fi
 
 BUILD_ATTESTATION_APP=ON
 BUILD_TESTS=ON
 export MAKEFLAGS=${MAKEFLAGS:-j3}
 
-mkdir -p cmake-build-$type && pushd cmake-build-$type &&
+mkdir -p $dir && pushd $dir &&
 cmake ../ -DBUILD_ATTESTATION_APP=$BUILD_ATTESTATION_APP \
              -DBUILD_TESTS=$BUILD_TESTS \
              -DCMAKE_BUILD_TYPE=$type \
