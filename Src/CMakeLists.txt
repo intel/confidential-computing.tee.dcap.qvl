@@ -349,6 +349,7 @@ add_custom_target(install_${PROJECT_NAME}
 		COMMENT "Installing ${PROJECT_NAME}")
 
 if (BUILD_TESTS)
+	add_custom_target(runTests COMMAND ${CMAKE_CTEST_COMMAND}  DEPENDS install_${PROJECT_NAME})
 	if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
 		if(UNIX)
             include(ProcessorCount)
