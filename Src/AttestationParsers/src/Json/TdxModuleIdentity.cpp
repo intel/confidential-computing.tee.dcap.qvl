@@ -73,6 +73,10 @@ TdxModuleIdentity::TdxModuleIdentity(const ::rapidjson::Value &tdxModuleIdentity
         LOG_AND_THROW(FormatException, "TDX Module Identity JSON's [attributesMask] field should be a hex encoded string");
     }
 
+    if (!tdxModuleIdentity.HasMember("tcbLevels"))
+    {
+        LOG_AND_THROW(FormatException, "TDX Module Identity JSON should have a [tcbLevels] field");
+    }
     const auto tcbLevels = &tdxModuleIdentity["tcbLevels"];
     if(!tcbLevels->IsArray())
     {

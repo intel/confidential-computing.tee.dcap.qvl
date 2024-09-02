@@ -938,3 +938,30 @@ TEST_F(TdxTcbInfoV3UT, shouldFailWhenTdxTcbInfoHasEmptyTdxModuleIdentitiesTcbLev
         EXPECT_EQ(std::string(err.what()), "Number of parsed [tcbLevels] should not be 0");
     }
 }
+
+TEST_F(TdxTcbInfoV3UT, shouldFailWhenTdxTcbInfoTdxModuleIdentitiesTcbLevelsFieldIsNotPresent)
+{
+    std::string jsonTemplate = R"(
+        "tdxModuleIdentities": [
+            {
+                "id": "1",
+                "mrsigner": "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F",
+                "attributes": "0000000000000000",
+                "attributesMask": "FFFFFFFFFFFFFFFF"
+            }
+        ],
+    )";
+    auto tcbInfoJson = TcbInfoGenerator::generateTdxTcbInfo(
+            validTdxTcbInfoV3Template,
+            TcbInfoGenerator::generateTcbLevelV3(validTcbLevelV3Template, validTdxTcbV3),
+            jsonTemplate);
+
+    try {
+        parser::json::TcbInfo::parse(tcbInfoJson);
+        FAIL() << "Parser should throw";
+    }
+    catch(const parser::FormatException &err)
+    {
+        EXPECT_EQ(std::string(err.what()), "TDX Module Identity JSON should have a [tcbLevels] field");
+    }
+}
