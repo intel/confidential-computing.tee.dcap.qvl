@@ -144,6 +144,11 @@ Status sgxAttestationVerifyPCKCertificate(const char *pemCertChain, const char *
         auto rootCa = dcap::parser::x509::Certificate::parse(pemRootCaCertificate);
         return dcap::PckCertVerifier{}.verify(chain, rootCaCrl, intermediateCrl, rootCa, currentTime);
     }
+    catch (const dcap::parser::InvalidExtensionException &ex)
+    {
+        LOG_ERROR("Trusted RootCA parsing failed because of invalid extensions: {}", ex.what());
+        return STATUS_TRUSTED_ROOT_CA_UNSUPPORTED_FORMAT;
+    }
     catch (const dcap::parser::FormatException& ex)
     {
         LOG_ERROR("Trusted RootCA parsing failed: {}", ex.what());
