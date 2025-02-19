@@ -9,7 +9,7 @@
 namespace intel { namespace sgx { namespace dcap { namespace quote {
 using namespace constants;
 
-bool Header::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool Header::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     if (!copyAndAdvance(version, from, end)) { return false; }
     if (!copyAndAdvance(attestationKeyType, from, end)) { return false; }
@@ -21,14 +21,14 @@ bool Header::insert(std::vector<uint8_t>::const_iterator& from, const std::vecto
     return true;
 }
 
-bool Body::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool Body::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     if (!copyAndAdvance(bodyType, from, end)) { return false; }
     if (!copyAndAdvance(size, from, end)) { return false; }
     return true;
 }
 
-bool EnclaveReport::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool EnclaveReport::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     if (!copyAndAdvance(cpuSvn, from, end)) { return false; }
     if (!copyAndAdvance(miscSelect, from, end)) { return false; }
@@ -91,7 +91,7 @@ std::array<uint8_t,ENCLAVE_REPORT_BYTE_LEN> EnclaveReport::rawBlob() const
     return ret;
 }
 
-bool TDReport10::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool TDReport10::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     if (!copyAndAdvance(teeTcbSvn, from, end)) { return false; }
     if (!copyAndAdvance(mrSeam, from, end)) { return false; }
@@ -164,7 +164,7 @@ std::array<uint8_t,TD_REPORT10_BYTE_LEN> TDReport10::rawBlob() const
     return ret;
 }
 
-bool TDReport15::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool TDReport15::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     if (!TDReport10::insert(from, end)) return false;
     if (!copyAndAdvance(teeTcbSvn2, from, end)) { return false; }
@@ -190,17 +190,17 @@ std::array<uint8_t,TD_REPORT15_BYTE_LEN> TDReport15::rawBlob() const
     return ret;
 }
 
-bool Ecdsa256BitSignature::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool Ecdsa256BitSignature::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     return copyAndAdvance(signature, from, end);
 }
 
-bool Ecdsa256BitPubkey::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool Ecdsa256BitPubkey::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     return copyAndAdvance(pubKey, from, end);
 }
 
-bool QeAuthData::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool QeAuthData::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     const auto amount = static_cast<size_t>(std::distance(from, end));
     if(from > end || amount < QE_AUTH_DATA_SIZE_BYTE_LEN)
@@ -235,7 +235,7 @@ bool QeAuthData::insert(std::vector<uint8_t>::const_iterator& from, const std::v
     return true;
 }
 
-bool CertificationData::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool CertificationData::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     const auto minLen = CERTIFICATION_DATA_SIZE_BYTE_LEN + CERTIFICATION_DATA_TYPE_BYTE_LEN;
     const auto amount = static_cast<size_t>(std::distance(from, end));
@@ -267,7 +267,7 @@ bool CertificationData::insert(std::vector<uint8_t>::const_iterator& from, const
     return true;
 }
 
-bool QEReportCertificationData::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool QEReportCertificationData::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     if (!copyAndAdvance(qeReport, from, ENCLAVE_REPORT_BYTE_LEN, end))
     {
@@ -321,7 +321,7 @@ bool QEReportCertificationData::insert(std::vector<uint8_t>::const_iterator& fro
     return true;
 }
 
-bool Ecdsa256BitQuoteV3AuthData::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool Ecdsa256BitQuoteV3AuthData::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     if (!copyAndAdvance(ecdsa256BitSignature, from, ECDSA_SIGNATURE_BYTE_LEN, end)) { return false; }
     if (!copyAndAdvance(ecdsaAttestationKey, from, ECDSA_PUBKEY_BYTE_LEN, end)) { return false; }
@@ -358,7 +358,7 @@ bool Ecdsa256BitQuoteV3AuthData::insert(std::vector<uint8_t>::const_iterator& fr
     return true;
 }
 
-bool Ecdsa256BitQuoteV4AuthData::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+bool Ecdsa256BitQuoteV4AuthData::insert(BufferView::const_iterator& from, const BufferView::const_iterator& end)
 {
     if (!copyAndAdvance(ecdsa256BitSignature, from, ECDSA_SIGNATURE_BYTE_LEN, end)) { return false; }
     if (!copyAndAdvance(ecdsaAttestationKey, from, ECDSA_PUBKEY_BYTE_LEN, end)) { return false; }

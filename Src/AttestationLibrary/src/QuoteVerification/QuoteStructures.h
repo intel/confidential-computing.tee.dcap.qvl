@@ -36,6 +36,7 @@
 #include <vector>
 
 #include "QuoteConstants.h"
+#include <Utils/BufferView.h>
 
 namespace intel { namespace sgx { namespace dcap { namespace quote {
 
@@ -49,7 +50,7 @@ struct Header
     std::array<uint8_t, 16> qeVendorId;
     std::array<uint8_t, 20> userData;
 
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
 };
 
 struct Body
@@ -57,7 +58,7 @@ struct Body
     uint16_t bodyType;
     uint32_t size;
 
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
 };
 
 struct EnclaveReport
@@ -75,7 +76,7 @@ struct EnclaveReport
     std::array<uint8_t, 60> reserved4;
     std::array<uint8_t, 64> reportData;
 
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
     std::array<uint8_t, constants::ENCLAVE_REPORT_BYTE_LEN> rawBlob() const;
 };
 
@@ -97,7 +98,7 @@ struct TDReport10
     std::array<uint8_t, 48> rtMr3;
     std::array<uint8_t, 64> reportData;
 
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
 
     std::array<uint8_t, constants::TD_REPORT10_BYTE_LEN> rawBlob() const;
 };
@@ -107,7 +108,7 @@ struct TDReport15 : public TDReport10
     std::array<uint8_t, 16> teeTcbSvn2;
     std::array<uint8_t, 48> mrServiceTd;
 
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
     std::array<uint8_t, constants::TD_REPORT15_BYTE_LEN> rawBlob() const;
 };
 
@@ -115,21 +116,21 @@ struct Ecdsa256BitSignature
 {
     std::array<uint8_t, dcap::constants::ECDSA_P256_SIGNATURE_BYTE_LEN> signature;
 
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
 };
 
 struct Ecdsa256BitPubkey
 {
     std::array<uint8_t, 64> pubKey;
 
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
 };
 
 struct QeAuthData
 {
     uint16_t parsedDataSize;
     std::vector<uint8_t> data;
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
 };
 
 struct CertificationData
@@ -137,7 +138,7 @@ struct CertificationData
     uint16_t type;
     uint32_t parsedDataSize;
     std::vector<uint8_t> data;
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
 };
 
 struct QEReportCertificationData
@@ -147,7 +148,7 @@ struct QEReportCertificationData
     QeAuthData qeAuthData{};
     CertificationData certificationData{};
 
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
 };
 
 struct Ecdsa256BitQuoteV3AuthData
@@ -160,7 +161,7 @@ struct Ecdsa256BitQuoteV3AuthData
     QeAuthData qeAuthData{};
     CertificationData certificationData{};
 
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
 };
 
 struct Ecdsa256BitQuoteV4AuthData
@@ -169,7 +170,7 @@ struct Ecdsa256BitQuoteV4AuthData
     Ecdsa256BitPubkey ecdsaAttestationKey{};
     CertificationData certificationData{};
 
-    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    bool insert(BufferView::const_iterator& from, const BufferView::const_iterator& end);
 };
 
 }}}}

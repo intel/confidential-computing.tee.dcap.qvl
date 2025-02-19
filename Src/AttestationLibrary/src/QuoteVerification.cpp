@@ -41,6 +41,7 @@
 #include "QuoteVerification/QuoteConstants.h"
 #include "QuoteVerification/QuoteParsers.h"
 
+#include "Utils/BufferView.h"
 #include "Verifiers/PckCertVerifier.h"
 #include "Verifiers/PckCrlVerifier.h"
 #include "Verifiers/TCBInfoVerifier.h"
@@ -55,6 +56,7 @@
 #include <SgxEcdsaAttestation/QuoteVerification.h>
 #include <Version/Version.h>
 #include <Utils/Logger.h>
+
 
 // On Windows in one of headers STATUS_INVALID_PARAMETER macro is defined and it conflicts with our status name so undef it.
 #undef STATUS_INVALID_PARAMETER
@@ -355,11 +357,11 @@ Status sgxAttestationVerifyQuote(const uint8_t* rawQuote, uint32_t quoteSize, co
    
     // We totally trust user on this, it should be explicitly and clearly
     // mentioned in doc, is there any max quote len other than numeric_limit<uint32_t>::max() ?
-    const std::vector<uint8_t> vecQuote(rawQuote, std::next(rawQuote, quoteSize));
+    const BufferView quoteView(rawQuote, quoteSize);
 
     /// 4.1.2.4.2
     dcap::Quote quote;
-    if(!quote.parse(vecQuote) || !quote.validate())
+    if(!quote.parse(quoteView) || !quote.validate())
     {
         LOG_ERROR("Quote format verification failure");
         return Status::STATUS_UNSUPPORTED_QUOTE_FORMAT;
@@ -430,7 +432,7 @@ Status sgxAttestationVerifyEnclaveReport(const uint8_t* enclaveReport, const cha
     }
 
     /// 4.1.2.9.1
-    const std::vector<uint8_t> vecEnclaveReport(enclaveReport, enclaveReport + dcap::constants::ENCLAVE_REPORT_BYTE_LEN);
+    const BufferView vecEnclaveReport(enclaveReport, dcap::constants::ENCLAVE_REPORT_BYTE_LEN); // size not taken as in input ????
     dcap::EnclaveReport eReport{};
     auto from = vecEnclaveReport.cbegin();
     auto end = vecEnclaveReport.cend();
@@ -445,6 +447,7 @@ Status sgxAttestationVerifyEnclaveReport(const uint8_t* enclaveReport, const cha
 
     if(from != end)
     {
+        // end - from log is nonsense and only make sense if iterator did not pass end which potentiantially is only half a case
         LOG_ERROR("Enclave Report parsing as binary data representation failure. EnclaveReport could not be iterated through {} bytes", end - from);
         return STATUS_SGX_ENCLAVE_REPORT_UNSUPPORTED_FORMAT;
     }
@@ -479,10 +482,10 @@ Status sgxAttestationGetQECertificationDataSize(
 
     // We totally trust user on this, it should be explicitly and clearly
     // mentioned in doc, is there any max quote len other than numeric_limit<uint32_t>::max() ?
-    const std::vector<uint8_t> vecQuote(rawQuote, std::next(rawQuote, quoteSize));
+    const BufferView quoteView(rawQuote, quoteSize);
 
     dcap::Quote quote;
-    if(!quote.parse(vecQuote) || !quote.validate())
+    if(!quote.parse(quoteView) || !quote.validate())
     {
         LOG_ERROR("Can't parse or validate quote");
         return Status::STATUS_UNSUPPORTED_QUOTE_FORMAT;
@@ -510,11 +513,11 @@ Status sgxAttestationGetQECertificationData(
 
     // We totally trust user on this, it should be explicitly and clearly
     // mentioned in doc, is there any max quote len other than numeric_limit<uint32_t>::max() ?
-    const std::vector<uint8_t> vecQuote(rawQuote, std::next(rawQuote, quoteSize));
+    const dcap::BufferView quoteView(rawQuote, quoteSize);
 
     dcap::Quote quote;
 
-    if(!quote.parse(vecQuote) || !quote.validate())
+    if(!quote.parse(quoteView) || !quote.validate())
     {
         LOG_ERROR("Can't parse or validate quote");
         return STATUS_UNSUPPORTED_QUOTE_FORMAT;

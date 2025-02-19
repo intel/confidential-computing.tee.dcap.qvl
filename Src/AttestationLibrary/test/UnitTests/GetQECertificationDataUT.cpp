@@ -46,12 +46,13 @@ struct GetQECertificationDataTests : public Test
     uint32_t placeholderSize = 0;
     uint16_t placeholderQeCertificationDataType = test::constants::PCK_ID_PLAIN_PPID;
 
-    Bytes prepareQuoteWithCertData(const uint16_t type, const Bytes &data) const
+    test::TestQuote prepareQuoteWithCertData(const uint16_t type, const Bytes &data) const
     {
         test::QuoteV3Generator generator;
         const Bytes pckData{'p', 'c', 'k', 'd', 'a', 't', 'a'};
         generator.withCertificationData(type, data)
                  .withAuthDataSize((uint32_t)(generator.getAuthSize() + data.size()));
+
         return generator.buildQuote();
     }
 };
@@ -99,7 +100,7 @@ TEST_F(GetQECertificationDataTests, invalidQuoteFormatShouldReturnUnsupportedQuo
 TEST_F(GetQECertificationDataTests, qeCertificationDataSizeAsParameterDiffersFromQuoteDataShouldReturnInvalidQeCertificationDataSizeStatus)
 {
     // GIVEN
-    auto quote = prepareQuoteWithCertData(test::constants::PCK_ID_PLAIN_PPID, {'p', 'c', 'k', 'd', 'a', 't', 'a'});
+    auto [view, quote] = prepareQuoteWithCertData(test::constants::PCK_ID_PLAIN_PPID, {'p', 'c', 'k', 'd', 'a', 't', 'a'});
 
     // WHEN/THEN
     ASSERT_EQ(STATUS_INVALID_QE_CERTIFICATION_DATA_SIZE,
@@ -111,7 +112,7 @@ TEST_F(GetQECertificationDataTests, positiveEmptycertificationDataShouldReturnOk
 {
     // GIVEN
     const auto expectedQeCertType = test::constants::PCK_ID_PLAIN_PPID;
-    const auto quote = prepareQuoteWithCertData(expectedQeCertType, {});
+    const auto [view, quote] = prepareQuoteWithCertData(expectedQeCertType, {});
     uint32_t qeCertificationDataSize = 0;
 
     const uint32_t CERT_DATA_BUFFER_SIZE = 1024;
@@ -141,7 +142,7 @@ TEST_P(GetQECertificationDataPositiveTests, validcertificationDataShouldReturnOk
     // GIVEN
     const auto expectedQeCertType = GetParam();
     const auto expectedcertificationData = Bytes{'p', 'c', 'k', 'd', 'a', 't', 'a'};
-    const auto quote = prepareQuoteWithCertData(expectedQeCertType, expectedcertificationData);
+    const auto [view, quote] = prepareQuoteWithCertData(expectedQeCertType, expectedcertificationData);
 
     std::vector<uint8_t> qeCertificationDataBuffer(expectedcertificationData.size(), 0x00);  // allocate an empty vector, it should be unchanged
     uint16_t qeCertificationDataType = 0;

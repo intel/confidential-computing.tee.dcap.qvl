@@ -31,6 +31,7 @@
 
 #include "Quote.h"
 #include "QuoteParsers.h"
+#include "Utils/BufferView.h"
 #include "Utils/Logger.h"
 
 #include <algorithm>
@@ -39,7 +40,7 @@
 namespace intel { namespace sgx { namespace dcap {
 using namespace constants;
 
-bool Quote::parse(const std::vector<uint8_t>& rawQuote)
+bool Quote::parse(const BufferView &rawQuote)
 {
     if(rawQuote.size() < QUOTE_MIN_BYTE_LEN)
     {
@@ -63,7 +64,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
 
     if (localHeader.version > constants::QUOTE_VERSION_4)
     {
-        if (!copyAndAdvance(localBody, from, BODY_BYTE_SIZE, rawQuote.end()))
+        if (!copyAndAdvance(localBody, from, BODY_BYTE_SIZE, rawQuote.cend()))
         {
             LOG_ERROR("Can't read SGX report body from quote. Expected size: {}", BODY_BYTE_SIZE);
             return false;
@@ -76,7 +77,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
                     LOG_ERROR("Unexpected SGX enclave report size. Expected size: {}", ENCLAVE_REPORT_BYTE_LEN);
                     return false;
                 }
-                if (!copyAndAdvance(localEnclaveReport, from, ENCLAVE_REPORT_BYTE_LEN, rawQuote.end()))
+                if (!copyAndAdvance(localEnclaveReport, from, ENCLAVE_REPORT_BYTE_LEN, rawQuote.cend()))
                 {
                     LOG_ERROR("Can't read SGX enclave report from quote. Expected size: {}", ENCLAVE_REPORT_BYTE_LEN);
                     return false;
@@ -89,7 +90,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
                     LOG_ERROR("Unexpected TDX TD Report 1.0 size. Expected size: {}", TD_REPORT10_BYTE_LEN);
                     return false;
                 }
-                if (!copyAndAdvance(localTdReport10, from, TD_REPORT10_BYTE_LEN, rawQuote.end()))
+                if (!copyAndAdvance(localTdReport10, from, TD_REPORT10_BYTE_LEN, rawQuote.cend()))
                 {
                     LOG_ERROR("Can't read TDX TD Report 1.0 from quote. Expected size: {}", TD_REPORT10_BYTE_LEN);
                     return false;
@@ -102,7 +103,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
                     LOG_ERROR("Unexpected TDX TD Report 1.5 size. Expected size: {}", TD_REPORT15_BYTE_LEN);
                     return false;
                 }
-                if (!copyAndAdvance(localTdReport15, from, TD_REPORT15_BYTE_LEN, rawQuote.end()))
+                if (!copyAndAdvance(localTdReport15, from, TD_REPORT15_BYTE_LEN, rawQuote.cend()))
                 {
                     LOG_ERROR("Can't read TDX TD Report 1.5 from quote. Expected size: {}", TD_REPORT10_BYTE_LEN);
                     return false;
@@ -117,7 +118,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
     {
         if (localHeader.teeType == TEE_TYPE_SGX)
         {
-            if (!copyAndAdvance(localEnclaveReport, from, ENCLAVE_REPORT_BYTE_LEN, rawQuote.end()))
+            if (!copyAndAdvance(localEnclaveReport, from, ENCLAVE_REPORT_BYTE_LEN, rawQuote.cend()))
             {
                 LOG_ERROR("Can't read SGX enclave report from quote. Expected size: {}", ENCLAVE_REPORT_BYTE_LEN);
                 return false;
@@ -126,7 +127,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
         }
         else if (localHeader.teeType == TEE_TYPE_TDX)
         {
-            if (!copyAndAdvance(localTdReport10, from, TD_REPORT10_BYTE_LEN, rawQuote.end()))
+            if (!copyAndAdvance(localTdReport10, from, TD_REPORT10_BYTE_LEN, rawQuote.cend()))
             {
                 LOG_ERROR("Can't read TDX TD Report 1.0 from quote. Expected size: {}", TD_REPORT10_BYTE_LEN);
                 return false;
@@ -136,11 +137,11 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
     }
 
     uint32_t localAuthDataSize = 0;
-    if (!copyAndAdvance(localAuthDataSize, from, rawQuote.end())) {
+    if (!copyAndAdvance(localAuthDataSize, from, rawQuote.cend())) {
         LOG_ERROR("Can't read auth data size  from quote.");
         return false;
     }
-    const auto remainingDistance = std::distance(from, rawQuote.end());
+    const auto remainingDistance = std::distance(from, rawQuote.cend());
     if(localAuthDataSize > remainingDistance)
     {
         LOG_ERROR("Declared auth data size {} is bigger than remaining buffer size {}", localAuthDataSize, remainingDistance);
@@ -151,7 +152,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
     Ecdsa256BitQuoteV4AuthData localQuoteV4Auth{};
     if (localHeader.version == constants::QUOTE_VERSION_3)
     {
-        if (!copyAndAdvance(localQuoteV3Auth, from, static_cast<size_t>(localAuthDataSize), rawQuote.end()))
+        if (!copyAndAdvance(localQuoteV3Auth, from, static_cast<size_t>(localAuthDataSize), rawQuote.cend()))
         {
             LOG_ERROR("Can't read QUOTE v3 Auth data. Expected size: {}", localAuthDataSize);
             return false;
@@ -165,16 +166,17 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
     }
     else if (localHeader.version > constants::QUOTE_VERSION_3)
     {
-        if (!copyAndAdvance(localQuoteV4Auth, from, static_cast<size_t>(localAuthDataSize), rawQuote.end()))
+        if (!copyAndAdvance(localQuoteV4Auth, from, static_cast<size_t>(localAuthDataSize), rawQuote.cend()))
         {
             LOG_ERROR("Can't read QUOTE v4 Auth data. Expected size: {}", localAuthDataSize);
             return false;
         }
         
-        const auto reportBytes = localQuoteV4Auth.certificationData.data;
-        auto beg = reportBytes.cbegin();
+        const auto &reportBytes = localQuoteV4Auth.certificationData.data;
+        dcap::BufferView view(reportBytes.data(), reportBytes.size());
+        auto beg = view.cbegin();
         QEReportCertificationData qeReportData;
-        if (!qeReportData.insert(beg, reportBytes.cend()))
+        if (!qeReportData.insert(beg, view.cend()))
         {
             return false;
         }
@@ -401,12 +403,11 @@ const std::array<uint8_t, 8>& Quote::getSeamAttributes() const
     }
 }
 
-std::vector<uint8_t> Quote::getDataToSignatureVerification(const std::vector<uint8_t>& rawQuote,
-                                                           const std::vector<uint8_t>::difference_type sizeToCopy) const
+std::vector<uint8_t> Quote::getDataToSignatureVerification(const BufferView &rawQuote, const BufferView::difference_type sizeToCopy) const
 {
     // private method, we call it at the end of parsing, so
     // here we assume format is valid
-    std::vector<uint8_t> ret(rawQuote.begin(), std::next(rawQuote.begin(), sizeToCopy));
+    std::vector<uint8_t> ret(rawQuote.cbegin(), std::next(rawQuote.cbegin(), sizeToCopy));
     return ret;
 }
 

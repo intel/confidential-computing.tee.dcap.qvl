@@ -1,9 +1,16 @@
 #ifndef SGXECDSAATTESTATION_TEST_QUOTE_UTILS_H_
 #define SGXECDSAATTESTATION_TEST_QUOTE_UTILS_H_
 
+#include "Utils/BufferView.h"
 #include <OpensslHelpers/Bytes.h>
 
 namespace intel { namespace sgx { namespace dcap { namespace test {
+
+struct TestQuote
+{
+  intel::sgx::dcap::BufferView quoteView;
+  Bytes quote;
+};
 
 static constexpr size_t QUOTE_HEADER_SIZE = 48;
 static constexpr size_t QUOTE_BODY_SIZE = 6;
@@ -54,6 +61,11 @@ Bytes toBytes(DataType &data) {
     auto bytes = reinterpret_cast<uint8_t *>(const_cast<typename std::remove_cv<DataType>::type *>(&data));
     retVal.insert(retVal.end(), bytes, bytes + sizeof(DataType));
     return retVal;
+}
+
+inline intel::sgx::dcap::BufferView getView(const std::vector<uint8_t> &buf)
+{
+  return intel::sgx::dcap::BufferView(buf.data(), buf.size());
 }
 
 }}}}

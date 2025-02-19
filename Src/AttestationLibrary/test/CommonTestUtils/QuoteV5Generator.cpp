@@ -246,19 +246,31 @@ QuoteV5Generator& QuoteV5Generator::withCertificationData(uint16_t type, const B
     return *this;
 }
 
-Bytes QuoteV5Generator::buildSgxQuote()
+dcap::test::TestQuote QuoteV5Generator::buildSgxQuote()
 {
-	return header.bytes() + body.bytes() + enclaveReport.bytes() + quoteAuthData.bytes();
+  auto quote = header.bytes() + body.bytes() + enclaveReport.bytes() + quoteAuthData.bytes();
+	return dcap::test::TestQuote{
+    dcap::test::getView(quote),
+    std::move(quote)
+  };
 }
 
-Bytes QuoteV5Generator::buildTdx10Quote()
+dcap::test::TestQuote QuoteV5Generator::buildTdx10Quote()
 {
-    return header.bytes() + body.bytes() + tdReport10.bytes() + quoteAuthData.bytes();
+  auto quote = header.bytes() + body.bytes() + tdReport10.bytes() + quoteAuthData.bytes();
+  return dcap::test::TestQuote{
+    dcap::test::getView(quote),
+    std::move(quote)
+  };
 }
 
-Bytes QuoteV5Generator::buildTdx15Quote()
+dcap::test::TestQuote QuoteV5Generator::buildTdx15Quote()
 {
-    return header.bytes() + body.bytes() + tdReport15.bytes() + quoteAuthData.bytes();
+  auto quote = header.bytes() + body.bytes() + tdReport15.bytes() + quoteAuthData.bytes();
+  return dcap::test::TestQuote{
+    dcap::test::getView(quote),
+    std::move(quote)
+  };
 }
 
 Bytes QuoteV5Generator::QuoteHeader::bytes() const

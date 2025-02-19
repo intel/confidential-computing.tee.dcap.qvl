@@ -31,7 +31,6 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <random>
 
 #include <QuoteVerification/Quote.h>
 #include <SgxEcdsaAttestation/QuoteVerification.h>
@@ -56,14 +55,16 @@ std::array<uint8_t, N> randomByteArray()
     return arr;
 }
 
-bool areBytesAtPosition(Bytes container, size_t position, const Bytes& bytes)
+bool areBytesAtPosition(const Bytes &container, size_t position, const Bytes& bytes)
 {
+    using diff_type = typename Bytes::difference_type;
     if (bytes.size() + position > container.size())
     {
         return false;
     }
-    auto sliceBegin = std::next(container.cbegin(), (long) position);
-    auto sliceEnd = std::next(sliceBegin, (long) bytes.size());
+
+    auto sliceBegin = std::next(container.cbegin(), static_cast<diff_type>(position));
+    auto sliceEnd = std::next(sliceBegin, static_cast<diff_type>(bytes.size()));
     Bytes slice(sliceBegin, sliceEnd);
     return bytes == slice;
 }
@@ -72,7 +73,7 @@ MATCHER_P2(DataAtPositionEq, position, data,
     std::string("Data at position " + PrintToString(position) + (negation ? " isn't" : " is") + " equal to " + PrintToString(data)))
 {
     auto bytes = test::toBytes(data);
-    return areBytesAtPosition(arg, (size_t) position, bytes);
+    return areBytesAtPosition(arg, static_cast<size_t>(position), bytes);
 }
 
 MATCHER_P2(BytesAtPositionEq, position, bytes,
@@ -137,8 +138,8 @@ constexpr size_t CERTIFICATION_DATA_POSITION_TDX_QUOTE = ATTESTATION_KEY_POSITIO
 TEST_F(QuoteV4GeneratorTests, shouldProvideGeneratedBinaryQuote)
 {
     test::QuoteV4Generator generator;
-    auto quote = generator.buildSgxQuote();
-    EXPECT_THAT(quote, SizeIs(test::QUOTE_V4_MINIMAL_SIZE));
+    auto [sgxQuoteView, sgxQuote] = generator.buildSgxQuote();
+    EXPECT_THAT(sgxQuote, SizeIs(test::QUOTE_V4_MINIMAL_SIZE));
 }
 
 TEST_F(QuoteV4GeneratorTests, shouldAllowSettingHeader)
@@ -160,8 +161,8 @@ TEST_F(QuoteV4GeneratorTests, shouldAllowSettingHeader)
     header.userData = userData;
 
     generator.withHeader(header);
-    auto sgxQuote = generator.buildSgxQuote();
-    auto tdxQuote = generator.buildTdxQuote();
+    auto [sgxQuoteView, sgxQuote] = generator.buildSgxQuote();
+    auto [tdxQuoteView, tdxQuote] = generator.buildTdxQuote();
 
     EXPECT_THAT(sgxQuote, DataAtPositionEq(VERSION_POSITION_IN_QUOTE, version));
     EXPECT_THAT(sgxQuote, DataAtPositionEq(ATTESTATION_KEY_TYPE_POSITION_IN_QUOTE, attestationKeyType));
@@ -210,7 +211,7 @@ TEST_F(QuoteV4GeneratorTests, shouldAllowSettingEnclaveReport)
     enclaveReport.reportData = reportedData;
 
     generator.withEnclaveReport(enclaveReport);
-    auto sgxQuote = generator.buildSgxQuote();
+    auto [sgxQuoteView, sgxQuote] = generator.buildSgxQuote();
 
     EXPECT_THAT(sgxQuote, DataAtPositionEq(CPUSVN_POSITION_IN_QUOTE, cpuSvn));
     EXPECT_THAT(sgxQuote, DataAtPositionEq(MISCSELECT_POSITION_IN_QUOTE, miscSelect));
@@ -264,7 +265,7 @@ TEST_F(QuoteV4GeneratorTests, shouldAllowSettingTDReport)
     tdReport.reportData = reportedData;
 
     generator.withTDReport(tdReport);
-    auto tdxQuote = generator.buildTdxQuote();
+    auto [tdxQuoteView, tdxQuote] = generator.buildTdxQuote();
 
     EXPECT_THAT(tdxQuote, DataAtPositionEq(TEE_TCB_SVN_POSITION_IN_QUOTE, teeTcbSvn));
     EXPECT_THAT(tdxQuote, DataAtPositionEq(MRSEAM_POSITION_IN_QUOTE, mrSeam));
@@ -290,8 +291,8 @@ TEST_F(QuoteV4GeneratorTests, shouldAllowSettingAuthDataSize)
     test::QuoteV4Generator generator;
 
     generator.withAuthDataSize(789);
-    auto tdxQuote = generator.buildTdxQuote();
-    auto sgxQuote = generator.buildSgxQuote();
+    auto [tdxQuoteView, tdxQuote] = generator.buildTdxQuote();
+    auto [sgxQuoteView, sgxQuote] = generator.buildSgxQuote();
 
     EXPECT_THAT(tdxQuote, DataAtPositionEq(AUTH_DATA_SIZE_POSITION_IN_TDX_QUOTE, authDataSize));
     EXPECT_THAT(sgxQuote, DataAtPositionEq(AUTH_DATA_SIZE_POSITION_IN_SGX_QUOTE, authDataSize));
@@ -318,8 +319,8 @@ TEST_F(QuoteV4GeneratorTests, shouldAllowSettingAuthData)
     authData.certificationData = certificationData;
 
     generator.withAuthData(authData);
-    auto tdxQuote = generator.buildTdxQuote();
-    auto sgxQuote = generator.buildSgxQuote();
+    auto [tdxQuoteView, tdxQuote] = generator.buildTdxQuote();
+    auto [sgxQuoteView, sgxQuote] = generator.buildSgxQuote();
 
     EXPECT_THAT(tdxQuote, DataAtPositionEq(AUTH_DATA_SIZE_POSITION_IN_TDX_QUOTE, authDataSize));
     EXPECT_THAT(tdxQuote, DataAtPositionEq(QUOTE_SIGNATURE_POSITION_TDX_QUOTE, ecdsaSignature.signature));

@@ -33,6 +33,7 @@
 #define INTEL_SGX_QVL_QUOTE_H_
 
 #include "QuoteStructures.h"
+#include <Utils/BufferView.h>
 
 namespace intel { namespace sgx { namespace dcap {
 using namespace intel::sgx::dcap::quote;
@@ -40,7 +41,7 @@ using namespace intel::sgx::dcap::quote;
 class Quote
 {
 public:
-    bool parse(const std::vector<uint8_t>& rawQuote);
+    bool parse(const BufferView &rawQuote);
 
     bool validate() const;
 
@@ -87,8 +88,7 @@ protected:
     std::array<uint8_t, constants::ECDSA_SIGNATURE_BYTE_LEN> quoteSignature{};
 
 private:
-    std::vector<uint8_t> getDataToSignatureVerification(const std::vector<uint8_t>& rawQuote,
-                                                        const std::vector<uint8_t>::difference_type) const;
+    std::vector<uint8_t> getDataToSignatureVerification(const BufferView &rawQuote, const BufferView::difference_type) const;
 };
 
 }}} // namespace intel { namespace sgx { namespace dcap { namespace test {

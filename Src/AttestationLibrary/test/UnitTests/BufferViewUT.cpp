@@ -1,0 +1,107 @@
+/*
+ * Copyright (C) 2025 Intel Corporation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in
+ *     the documentation and/or other materials provided with the
+ *     distribution.
+ *   * Neither the name of Intel Corporation nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#include <gtest/gtest.h>
+#include <Utils/BufferView.h>
+
+using namespace intel::sgx;
+
+TEST(BufferViewUT, size)
+{
+  // GIVEN
+  uint8_t buffer[] = {0x00, 0x01, 0x02};
+  dcap::BufferView view(buffer, std::size(buffer));
+ 
+  // WHEN
+  const size_t actualSize = view.size(); 
+
+  // THEN
+  EXPECT_EQ(3, actualSize);
+}
+
+TEST(BufferViewUT, cmp)
+{
+  // GIVEN
+  uint8_t buffer[] = {0x00, 0x01, 0x02};
+  const dcap::BufferView view(buffer, std::size(buffer));
+ 
+  // WHEN/THEN
+  for(size_t i = 0; i < std::size(buffer); ++i)
+    EXPECT_EQ(buffer[i], view[i]);  
+}
+
+TEST(BufferViewUT, iteratorCmp)
+{
+  // GIVEN
+  uint8_t buffer[] = {0x00, 0x01, 0x02};
+  const dcap::BufferView view(buffer, std::size(buffer));
+
+  // THEN
+  EXPECT_TRUE(std::equal(std::begin(buffer), std::end(buffer), view.cbegin(), view.cend())); 
+}
+
+TEST(BufferViewUT, distance)
+{
+  // GIVEN
+  uint8_t buffer[] = {0x00, 0x01, 0x02};
+  const dcap::BufferView view(buffer, std::size(buffer));
+
+  // THEN
+  EXPECT_EQ(std::size(buffer), std::distance(view.cbegin(), view.cend()));
+}
+
+TEST(BufferViewUT, next)
+{
+  // GIVEN
+  uint8_t buffer[] = {0x00, 0x01, 0x02, 0x03};
+  const dcap::BufferView view(buffer, std::size(buffer));
+
+  // WHEN
+  auto second = std::next(view.cbegin());
+
+  // THEN
+  EXPECT_EQ(buffer[1], *second);
+}
+
+TEST(BufferViewUT, advance)
+{
+  // GIVEN
+  uint8_t buffer[] = {0x00, 0x01, 0x02, 0x03};
+  const dcap::BufferView view(buffer, std::size(buffer));
+
+  // WHEN
+  auto position = std::next(view.cbegin());
+  std::advance(position, 2);
+
+  // THEN
+  EXPECT_EQ(buffer[3], *position);
+}
+

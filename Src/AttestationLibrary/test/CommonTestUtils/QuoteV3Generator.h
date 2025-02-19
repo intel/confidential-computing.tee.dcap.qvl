@@ -32,9 +32,10 @@
 #ifndef SGXECDSAATTESTATION_TEST_QUOTEV3_GENERATOR_H_
 #define SGXECDSAATTESTATION_TEST_QUOTEV3_GENERATOR_H_
 
+#include "QuoteUtils.h"
+
 #include <cstdint>
 #include <array>
-#include <vector>
 #include <OpensslHelpers/Bytes.h>
 
 namespace intel { namespace sgx { namespace dcap { namespace test {
@@ -148,8 +149,9 @@ public:
     QuoteV3Generator& withcertificationData(const CertificationData& certificationData);
     QuoteV3Generator& withCertificationData(uint16_t type, const Bytes& keyData);
 
-    Bytes buildQuote();
+    TestQuote buildQuote();
     Bytes buildTdxQuote();
+
 
 private:  
     QuoteHeader header;

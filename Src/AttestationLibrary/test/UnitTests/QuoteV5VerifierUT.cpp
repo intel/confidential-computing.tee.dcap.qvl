@@ -33,7 +33,6 @@
 #include <Verifiers/QuoteVerifier.h>
 #include <PckParser/FormatException.h>
 
-#include <utility>
 #include <QuoteVerification/QuoteConstants.h>
 
 #include "Mocks/CertCrlStoresMocks.h"
@@ -43,7 +42,6 @@
 #include "DigestUtils.h"
 #include "QuoteV5Generator.h"
 #include "KeyHelpers.h"
-#include "Constants/QuoteTestConstants.h"
 #include "EcdsaSignatureGenerator.h"
 #include "CertVerification/X509Constants.h"
 
@@ -52,6 +50,9 @@ using namespace dcap::parser::json;
 using namespace ::testing;
 
 namespace {
+    // so there are ByteOperands.h but we just copy these around heh?
+    // i get not to use prod code in tests buy we could just have one copy in test space
+    // instead of multiple copies
 
     uint16_t toUint16(uint8_t leftMostByte, uint8_t rightMostByte)
     {
@@ -112,8 +113,8 @@ struct QuoteV5VerifierUT: public testing::Test
     const std::vector<uint8_t> tdxModuleMrSigner = std::vector<uint8_t>(48, 0x00);
     const std::vector<uint8_t> tdxModuleAttributes = std::vector<uint8_t>(8, 0x00);
     const std::vector<uint8_t> tdxModuleAttributesMask = std::vector<uint8_t>(8, 0xFF);
-    const TdxModule tdxModule = TdxModule(tdxModuleMrSigner, tdxModuleAttributes,
-                                                                                  tdxModuleAttributesMask);
+    const TdxModule tdxModule = TdxModule(tdxModuleMrSigner, tdxModuleAttributes, tdxModuleAttributesMask);
+
     TdxModuleTcbLevel tdxModuleTcbLevel = TdxModuleTcbLevel(
             TdxModuleTcb(2),
             1, "UpToDate", std::vector<std::string>());
@@ -216,36 +217,36 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbInfoMismatchWhenPceIdDoesNotMatch
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusInvalidPckCrlWhenPeriodAndIssuerIsInvalid)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
     dcap::Quote quote;
 
     EXPECT_CALL(crl, getIssuer()).WillRepeatedly(testing::ReturnRef(dcap::constants::ROOT_CA_CRL_ISSUER));
 
 
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_INVALID_PCK_CRL, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusInvalidPckCrlWhenCrlIssuerIsDifferentThanPck)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
     dcap::Quote quote;
 
     EXPECT_CALL(crl, getIssuer()).WillRepeatedly(testing::ReturnRef(dcap::constants::PCK_PLATFORM_CRL_ISSUER));
     EXPECT_CALL(pck, getIssuer()).WillRepeatedly(testing::ReturnRef(dcap::constants::PROCESSOR_CA_SUBJECT));
 
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_INVALID_PCK_CRL, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusPckRevoked)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
     dcap::Quote quote;
 
     EXPECT_CALL(crl, isRevoked(testing::_)).WillOnce(testing::Return(true));
 
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_PCK_REVOKED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -253,22 +254,22 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusInvalidQeFormat)
 {
     dcap::Quote quote;
     gen.getAuthData().ecdsaAttestationKey.publicKey = std::array<uint8_t, 64>{};
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_INVALID_QE_REPORT_DATA, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldVerifySgxCorrectly)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     tcbs.insert(tcbs.begin(),
                 TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_OK, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -285,7 +286,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx10Correctly)
     gen.withBody({ dcap::constants::BODY_TD_REPORT10_TYPE, dcap::constants::TD_REPORT10_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                        gen.getTdReport10().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx10Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx10Quote();
 
     tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
@@ -296,7 +297,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx10Correctly)
     tdxModuleTcbLevels.insert(tdxModuleTcbLevels.begin(), tdxModuleTcbLevel);
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_OK, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -313,7 +314,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15Correctly)
     gen.withBody({ dcap::constants::BODY_TD_REPORT15_TYPE, dcap::constants::TD_REPORT15_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                        gen.getTdReport15().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx15Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx15Quote();
 
     tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
@@ -322,7 +323,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15Correctly)
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::TD_QE));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_OK, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -339,7 +340,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15CorrectlyWhenTdxModuleVersionIsZero)
     gen.withBody({ dcap::constants::BODY_TD_REPORT15_TYPE, dcap::constants::TD_REPORT15_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                gen.getTdReport15().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx15Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx15Quote();
 
     tdxTcbComponents[1] = 0; // 2nd svn zeroed
 
@@ -350,7 +351,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15CorrectlyWhenTdxModuleVersionIsZero)
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::TD_QE));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_OK, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -369,7 +370,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxM
     gen.withBody({ dcap::constants::BODY_TD_REPORT15_TYPE, dcap::constants::TD_REPORT15_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                gen.getTdReport15().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx15Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx15Quote();
 
     tdxTcbComponents[1] = 0; // 0 to make sure that expected TDX Module TCB Levels are used.
 
@@ -389,7 +390,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxM
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::TD_QE));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_TD_RELAUNCH_ADVISED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -408,7 +409,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxM
     gen.withBody({ dcap::constants::BODY_TD_REPORT15_TYPE, dcap::constants::TD_REPORT15_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                gen.getTdReport15().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx15Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx15Quote();
 
     tdxTcbComponents[1] = 1; // 1 to make sure that expected TDX Module TCB Levels are used.
 
@@ -428,7 +429,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxM
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::TD_QE));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_TD_RELAUNCH_ADVISED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -447,7 +448,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNee
     gen.withBody({ dcap::constants::BODY_TD_REPORT15_TYPE, dcap::constants::TD_REPORT15_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                gen.getTdReport15().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx15Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx15Quote();
 
     tdxTcbComponents[1] = 0; // 0 to make sure that expected TDX Module TCB Levels are used.
 
@@ -467,7 +468,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNee
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::TD_QE));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -486,7 +487,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNee
     gen.withBody({ dcap::constants::BODY_TD_REPORT15_TYPE, dcap::constants::TD_REPORT15_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                gen.getTdReport15().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx15Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx15Quote();
 
     tdxTcbComponents[1] = 1; // 1 to make sure that expected TDX Module TCB Levels are used.
 
@@ -506,7 +507,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNee
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::TD_QE));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -524,7 +525,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenSeamAttricutesN
     gen.withBody({ dcap::constants::BODY_TD_REPORT10_TYPE, dcap::constants::TD_REPORT10_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                        gen.getTdReport10().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx10Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx10Quote();
     tdxTcbComponents[1] = 0;
 
     tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
@@ -533,7 +534,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenSeamAttricutesN
     auto tdxModuleWithDifferentMask = TdxModule(tdxModule.getMrSigner(), tdxModule.getAttributes(), {0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF});
     EXPECT_CALL(tcbInfoJson, getTdxModule()).WillOnce(testing::ReturnRef(tdxModuleWithDifferentMask));
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TDX_MODULE_MISMATCH, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -546,7 +547,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusQEIdentityMismatchWhenTdxQuoteAndEnc
     gen.withBody({ dcap::constants::BODY_TD_REPORT10_TYPE, dcap::constants::TD_REPORT10_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                        gen.getTdReport10().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx10Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx10Quote();
 
     tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
@@ -554,7 +555,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusQEIdentityMismatchWhenTdxQuoteAndEnc
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::QE));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_QE_IDENTITY_MISMATCH, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -572,13 +573,13 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenTdReportMrsigne
     gen.withBody({ dcap::constants::BODY_TD_REPORT10_TYPE, dcap::constants::TD_REPORT10_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                        gen.getTdReport10().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx10Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx10Quote();
 
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
     EXPECT_CALL(tcbInfoJson, getVersion()).WillRepeatedly(testing::Return(3));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TDX_MODULE_MISMATCH, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -596,13 +597,13 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenTdReportSeamAtt
     gen.withBody({ dcap::constants::BODY_TD_REPORT10_TYPE, dcap::constants::TD_REPORT10_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                        gen.getTdReport10().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx10Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx10Quote();
 
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
     EXPECT_CALL(tcbInfoJson, getVersion()).WillRepeatedly(testing::Return(3));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TDX_MODULE_MISMATCH, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -610,20 +611,20 @@ TEST_F(QuoteV5VerifierUT, shouldReturnInvalidPCKCert)
 {
     const auto emptySubject = dcap::parser::x509::DistinguishedName("", "", "", "", "", "");
     ON_CALL(pck, getSubject()).WillByDefault(testing::ReturnRef(emptySubject));
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_INVALID_PCK_CERT, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnQuoteInvalidSignature)
 {
     gen.getAuthData().ecdsaSignature.signature[0] = (unsigned char) ~gen.getAuthData().ecdsaSignature.signature[0];
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_INVALID_QUOTE_SIGNATURE, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -631,28 +632,28 @@ TEST_F(QuoteV5VerifierUT, shouldReturnInvalidQeReportSignature)
 {
     qeReportCertificationData.qeReportSignature.signature[0] = (unsigned char) ~qeReportCertificationData.qeReportSignature.signature[0];
     certificationData.keyData = qeReportCertificationData.bytes();
-    const auto quoteBin = gen.withCertificationData(certificationData).buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.withCertificationData(certificationData).buildSgxQuote();
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_INVALID_QE_REPORT_SIGNATURE, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnTcbRevokedOnLatestRevokedEqualPckTCB)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     tcbs.insert(tcbs.begin(), TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "Revoked"});
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_REVOKED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnConfigurationNeeded)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     std::vector<uint8_t> higherCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x41, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
     std::vector<uint8_t> lowerCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x40, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
@@ -665,13 +666,13 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnConf
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnConfigurationNeededForTcbInfoV2)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     std::vector<uint8_t> higherCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x41, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
     std::vector<uint8_t> lowerCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x40, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
@@ -685,13 +686,13 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnConf
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnOutOfDateConfigurationNeeded)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     std::vector<uint8_t> higherCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x41, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
     std::vector<uint8_t> lowerCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x40, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
@@ -705,13 +706,13 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnOutO
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_OUT_OF_DATE_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBAndReturnConfigurationNeeded)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     std::vector<uint8_t> higherCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x41, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
     std::vector<uint8_t> lowerCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x40, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
@@ -728,13 +729,13 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBAndReturnConfigurationNeeded)
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBAndReturnConfigurationAndSwHardeningNeeded)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     std::vector<uint8_t> higherCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x41, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
     std::vector<uint8_t> lowerCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x40, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
@@ -751,13 +752,13 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBAndReturnConfigurationAndSwHarden
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_CONFIGURATION_AND_SW_HARDENING_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnTcbNotSupportedWhenOnlyPceSvnIsHigher)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     const std::vector<uint8_t> higherPcesvn = {0xff, 0xff};
 
@@ -765,13 +766,13 @@ TEST_F(QuoteV5VerifierUT, shouldReturnTcbNotSupportedWhenOnlyPceSvnIsHigher)
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_NOT_SUPPORTED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnTcbRevokedWhenOnlyCpuSvnIsLower)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     std::vector<uint8_t> lowerCpusvn = cpusvn;
     lowerCpusvn[8]--;
@@ -780,13 +781,13 @@ TEST_F(QuoteV5VerifierUT, shouldReturnTcbRevokedWhenOnlyCpuSvnIsLower)
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_REVOKED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnTcbRevokedWhenOnlyPcesvnIsLower)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     const std::vector<uint8_t> lowerPcesvn = {0x21, 0x12};
 
@@ -794,13 +795,13 @@ TEST_F(QuoteV5VerifierUT, shouldReturnTcbRevokedWhenOnlyPcesvnIsLower)
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_REVOKED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldNOTReturnTcbRevokedWhenRevokedPcesvnAndCpusvnAreLower)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     std::vector<uint8_t> lowerCpusvn = cpusvn;
     lowerCpusvn[8]--;
@@ -812,13 +813,13 @@ TEST_F(QuoteV5VerifierUT, shouldNOTReturnTcbRevokedWhenRevokedPcesvnAndCpusvnAre
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_OK, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnSwHardeningNeeded)
 {
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
 
     std::vector<uint8_t> lowerCpusvn = cpusvn;
     lowerCpusvn[8]--;
@@ -829,7 +830,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnSwHardeningNeeded)
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_SW_HARDENING_NEEDED , dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -845,9 +846,9 @@ struct QuoteV5VerifierUTQeIdentityStatusParametrized : public QuoteV5VerifierUT,
 TEST_P(QuoteV5VerifierUTQeIdentityStatusParametrized, testAllStatuses)
 {
     auto params = GetParam();
-    const auto quoteBin = gen.buildSgxQuote();
+    const auto [quoteView, quoteBin] = gen.buildSgxQuote();
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     tcbs.insert(tcbs.begin(), TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
 
     tdxTcbComponents[1] = 0; // 0 to make sure that expected tcb levels are used. 1 would use TDX Module TCB Levels
@@ -874,7 +875,7 @@ TEST_F(QuoteV5VerifierUT, shouldBackoffToLowerLevelBecauseTdReportTeeSvnIsOutOfD
     gen.withBody({ dcap::constants::BODY_TD_REPORT10_TYPE, dcap::constants::TD_REPORT10_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                        gen.getTdReport10().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx10Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx10Quote();
 
     tdxTcbComponents[1] = 0; // 0 to make sure that expected tcb levels are used. 1 would use TDX Module TCB Levels
 
@@ -887,7 +888,7 @@ TEST_F(QuoteV5VerifierUT, shouldBackoffToLowerLevelBecauseTdReportTeeSvnIsOutOfD
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::TD_QE));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_OUT_OF_DATE, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -904,7 +905,7 @@ TEST_F(QuoteV5VerifierUT, shouldBackoffToLowerLevelBecauseNoAllSvnsAreHigher)
     gen.withBody({ dcap::constants::BODY_TD_REPORT10_TYPE, dcap::constants::TD_REPORT10_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                        gen.getTdReport10().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx10Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx10Quote();
     tdxTcbComponents[1] = 0; // 0 to make sure that expected tcb levels are used. 1 would use TDX Module TCB Levels
     std::vector<TcbComponent> tdxComponents = {0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
@@ -917,7 +918,7 @@ TEST_F(QuoteV5VerifierUT, shouldBackoffToLowerLevelBecauseNoAllSvnsAreHigher)
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::TD_QE));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_OUT_OF_DATE, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 
@@ -934,7 +935,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnTcbNotSupportedIfNotMatchingTcbLevelIsFoun
     gen.withBody({ dcap::constants::BODY_TD_REPORT10_TYPE, dcap::constants::TD_REPORT10_BYTE_LEN });
     gen.getAuthData().ecdsaSignature.signature = signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes() +
                                                                        gen.getTdReport10().bytes(), *privKey);
-    const auto quoteBin = gen.buildTdx10Quote();
+    const auto [quoteView, quoteBin] = gen.buildTdx10Quote();
 
     tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0xF0)), toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
     tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0x60)), toUint16(pcesvn[1], pcesvn[0]), "OutOfDate"});
@@ -945,7 +946,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnTcbNotSupportedIfNotMatchingTcbLevelIsFoun
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::TD_QE));
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(quoteBin));
+    ASSERT_TRUE(quote.parse(quoteView));
     EXPECT_EQ(STATUS_TCB_NOT_SUPPORTED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier));
 }
 

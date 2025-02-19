@@ -29,6 +29,7 @@
  *
  */
 
+#include <algorithm>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
@@ -36,6 +37,8 @@
 #include <SgxEcdsaAttestation/QuoteVerification.h>
 #include "QuoteV3Generator.h"
 #include "QuoteUtils.h"
+
+#include <Utils/BufferView.h>
 
 using namespace testing;
 using namespace ::intel::sgx::dcap;
@@ -46,7 +49,7 @@ struct QuoteV3GeneratorTests : public Test
 
 namespace {
 
-bool areBytesAtPosition(Bytes container, size_t position, const Bytes& bytes)
+bool areBytesAtPosition(const Bytes &container, size_t position, const Bytes& bytes)
 {
     if (bytes.size() + position > container.size())
     {
@@ -103,7 +106,7 @@ constexpr size_t ECDSA_ATTESTATION_KEY_POSITION =
 TEST_F(QuoteV3GeneratorTests, shouldProvideGeneratedBinaryQuote)
 {
     test::QuoteV3Generator generator;
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
     EXPECT_THAT(quote, SizeIs(test::QUOTE_V3_MINIMAL_SIZE));
 }
 
@@ -113,7 +116,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingQeSvn)
     uint16_t qeSvn = 55;
 
     generator.withQeSvn(qeSvn);
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, DataAtPositionEq(QE_SVN_POSITION_IN_HEADER, qeSvn));
 }
@@ -124,7 +127,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingPceSvn)
     uint16_t pceSvn = 256;
 
     generator.withPceSvn(pceSvn);
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, DataAtPositionEq(PCE_SVN_POSITION_IN_HEADER, pceSvn));
 }
@@ -136,7 +139,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowChainingMethods)
     uint16_t qeSvn = 88;
 
     generator.withQeSvn(qeSvn).withPceSvn(pceSvn);
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, AllOf(DataAtPositionEq(QE_SVN_POSITION_IN_HEADER, qeSvn), DataAtPositionEq(PCE_SVN_POSITION_IN_HEADER, pceSvn)));
 }
@@ -147,7 +150,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingHeader)
     test::QuoteV3Generator::QuoteHeader header = {5, 1, 229, 0, 0, 823, {{0, 1, 4}}, {{20, 50, 88, 153}}};
 
     generator.withHeader(header);
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, DataAtPositionEq(0, header));
 }
@@ -158,7 +161,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingBody)
     test::QuoteV3Generator::EnclaveReport er = {{{45, 88, 62}}, 2222, {{}}, {{32}}, {{'m', 'r', 'e'}}, {{}}, {{'m', 'r', 's'}}, {{}}, 4, 35, {{}}, {{99, 194, 78}}};
 
     generator.withEnclaveReport(er);
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, DataAtPositionEq(BODY_POSITION, er));
 }
@@ -169,7 +172,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingQeReport)
     test::QuoteV3Generator::EnclaveReport er = {{{45, 88, 62}}, 2222, {{}}, {{32}}, {{'m', 'r', 'e'}}, {{}}, {{'m', 'r', 's'}}, {{}}, 4, 35, {{}}, {{99, 194, 78}}};
 
     generator.withQeReport(er);
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, DataAtPositionEq(QE_REPORT_DATA_POSITION, er));
 }
@@ -180,7 +183,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingQeReportSignature)
     test::QuoteV3Generator::EcdsaSignature sign = {{"signature"}};
 
     generator.withQeReportSignature(sign);
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, DataAtPositionEq(QE_REPORT_SIGNATURE_POSITION, sign));
 }
@@ -191,7 +194,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingEcdsaAttestationKey)
     test::QuoteV3Generator::EcdsaPublicKey key = {{"public key"}};
 
     generator.withAttestationKey(key);
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, DataAtPositionEq(ECDSA_ATTESTATION_KEY_POSITION, key));
 }
@@ -202,7 +205,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingEmptyPCKData)
     Bytes pckData{};
     generator.withCertificationData(1, pckData);
 
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, SizeIs(test::QUOTE_V3_MINIMAL_SIZE));
 }
@@ -213,7 +216,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingArbitraryPCKData)
     Bytes pckData{'p', 'c', 'k', 'd', 'a', 't', 'a'};
     generator.withCertificationData(2, pckData);
 
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, SizeIs(test::QUOTE_V3_MINIMAL_SIZE + pckData.size()));
     EXPECT_THAT(quote,
@@ -228,7 +231,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingEmptyAuthData)
     Bytes authData{};
     generator.withQeAuthData(authData);
 
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, SizeIs(test::QUOTE_V3_MINIMAL_SIZE));
 }
@@ -239,7 +242,7 @@ TEST_F(QuoteV3GeneratorTests, shouldAllowSettingArbitraryAuthData)
     Bytes authData{'a', 'u', 't', 'h'};
     generator.withQeAuthData(authData);
 
-    auto quote = generator.buildQuote();
+    auto [view, quote] = generator.buildQuote();
 
     EXPECT_THAT(quote, SizeIs(test::QUOTE_V3_MINIMAL_SIZE + authData.size()));
     EXPECT_THAT(quote,
@@ -258,5 +261,18 @@ TEST_F(QuoteV3GeneratorTests, withArbitraryPckDataShouldBeParsable)
     intel::sgx::dcap::Quote quote;
 
     // WHEN/THEN
-    ASSERT_TRUE(quote.parse(generatedQuote));
+    ASSERT_TRUE(quote.parse(generatedQuote.quoteView));
+}
+
+TEST_F(QuoteV3GeneratorTests, checkBufferViewGeneration)
+{
+    // GIVEN
+    test::QuoteV3Generator generator;
+    const Bytes pckData{'p', 'c', 'k', 'd', 'a', 't', 'a'};
+
+    // WHEN
+    const auto bufferView = test::getView(pckData);
+
+    // WHEN
+    ASSERT_TRUE( std::equal(pckData.begin(), pckData.end(), bufferView.cbegin(), bufferView.cend()) );
 }

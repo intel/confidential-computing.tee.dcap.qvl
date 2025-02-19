@@ -32,15 +32,14 @@
 #ifndef INTEL_SGX_QVL_QUOTEPARSERS_H_
 #define INTEL_SGX_QVL_QUOTEPARSERS_H_
 
-#include <vector>
-#include "QuoteConstants.h"
 #include "ByteOperands.h"
+#include <Utils/BufferView.h>
 
 namespace intel { namespace sgx { namespace dcap { namespace quote {
 
 template<typename T>
-inline bool copyAndAdvance(T &val, std::vector<uint8_t>::const_iterator &from, size_t amount,
-                           const std::vector<uint8_t>::const_iterator &totalEnd) {
+inline bool copyAndAdvance(T &val, BufferView::const_iterator &from, size_t amount,
+                           const BufferView::const_iterator &totalEnd) {
     const auto available = std::distance(from, totalEnd);
     if (available < 0 || (unsigned) available < amount) {
         return false;
@@ -50,8 +49,8 @@ inline bool copyAndAdvance(T &val, std::vector<uint8_t>::const_iterator &from, s
 }
 
 template<size_t N>
-inline bool copyAndAdvance(std::array <uint8_t, N> &arr, std::vector<uint8_t>::const_iterator &from,
-                           const std::vector<uint8_t>::const_iterator &totalEnd) {
+inline bool copyAndAdvance(std::array <uint8_t, N> &arr, BufferView::const_iterator &from,
+                           const BufferView::const_iterator &totalEnd) {
     const auto capacity = std::distance(arr.cbegin(), arr.cend());
     if (std::distance(from, totalEnd) < capacity) {
         return false;
@@ -62,8 +61,8 @@ inline bool copyAndAdvance(std::array <uint8_t, N> &arr, std::vector<uint8_t>::c
     return true;
 }
 
-inline bool copyAndAdvance(uint16_t &val, std::vector<uint8_t>::const_iterator &from,
-                           const std::vector<uint8_t>::const_iterator &totalEnd) {
+inline bool copyAndAdvance(uint16_t &val, BufferView::const_iterator &from,
+                           const BufferView::const_iterator &totalEnd) {
     const auto available = std::distance(from, totalEnd);
     const auto capacity = sizeof(uint16_t);
     if (available < 0 || (unsigned) available < capacity) {
@@ -76,8 +75,8 @@ inline bool copyAndAdvance(uint16_t &val, std::vector<uint8_t>::const_iterator &
 }
 
 
-inline bool copyAndAdvance(uint32_t &val, std::vector<uint8_t>::const_iterator &position,
-                           const std::vector<uint8_t>::const_iterator &totalEnd) {
+inline bool copyAndAdvance(uint32_t &val, BufferView::const_iterator &position,
+                           const BufferView::const_iterator &totalEnd) {
     const auto available = std::distance(position, totalEnd);
     const auto capacity = sizeof(uint32_t);
     if (available < 0 || (unsigned) available < capacity) {

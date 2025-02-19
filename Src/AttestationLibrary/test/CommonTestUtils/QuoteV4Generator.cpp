@@ -221,14 +221,22 @@ QuoteV4Generator& QuoteV4Generator::withCertificationData(uint16_t type, const B
     return *this;
 }
 
-Bytes QuoteV4Generator::buildSgxQuote()
+dcap::test::TestQuote QuoteV4Generator::buildSgxQuote()
 {
-	return header.bytes() + enclaveReport.bytes() + quoteAuthData.bytes();
+  auto quoteBytes = header.bytes() + enclaveReport.bytes() + quoteAuthData.bytes();
+	return dcap::test::TestQuote {
+    dcap::test::getView(quoteBytes),
+    std::move(quoteBytes)
+  }; 
 }
 
-Bytes QuoteV4Generator::buildTdxQuote()
+dcap::test::TestQuote QuoteV4Generator::buildTdxQuote()
 {
-    return header.bytes() + tdReport.bytes() + quoteAuthData.bytes();
+    auto quoteBytes = header.bytes() + tdReport.bytes() + quoteAuthData.bytes();
+    return dcap::test::TestQuote {
+      dcap::test::getView(quoteBytes),
+      std::move(quoteBytes)
+  };
 }
 
 Bytes QuoteV4Generator::QuoteHeader::bytes() const

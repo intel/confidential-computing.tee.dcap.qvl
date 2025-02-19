@@ -255,7 +255,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedQuoteFormatWhenQuoteSizeIsIncorrec
 {
     // GIVEN
     auto incorrectQouteSize = 0;
-    auto quote = quoteV3Generator.buildQuote();
+    auto [view, quote] = quoteV3Generator.buildQuote();
 
     // WHEN
     auto result = sgxAttestationVerifyQuote(quote.data(), (unsigned) incorrectQouteSize, placeHolder, placeHolder, placeHolder, placeHolder);
@@ -270,7 +270,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedQuoteFormatWhenQuoteHeaderVersionI
     QuoteV3Generator::QuoteHeader quoteHeader{};
     quoteHeader.version = 999;
     quoteV3Generator.withHeader(quoteHeader);
-    auto quote = quoteV3Generator.buildQuote();
+    auto [view, quote] = quoteV3Generator.buildQuote();
 
 
     // WHEN
@@ -303,7 +303,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedPckCertFormatWhenVerifyPckCertFail
     quoteV3Generator.getAuthData().ecdsaSignature.signature =
             signAndGetRaw(concat(quoteV3Generator.getHeader().bytes(), quoteV3Generator.getEnclaveReport().bytes()), *pckCertKeyPtr);
 
-    auto quote = quoteV3Generator.buildQuote();
+    auto [view, quote] = quoteV3Generator.buildQuote();
     auto pckCrl = getValidCrl(interCert);
     auto tcbInfoBodyBytes = Bytes{};
     tcbInfoBodyBytes.insert(tcbInfoBodyBytes.end(), positiveTcbInfoV2JsonBody.begin(), positiveTcbInfoV2JsonBody.end());
@@ -328,7 +328,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedPckCertFormatWhenVerifyPckCertFail
 TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedPckCrlFormatWhenVerifyPckCrlFail)
 {
     // GIVEN
-    auto quote = quoteV3Generator.buildQuote();
+    auto [view, quote] = quoteV3Generator.buildQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
 
     // WHEN
@@ -341,7 +341,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedPckCrlFormatWhenVerifyPckCrlFail)
 TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedTcbInfoFormatWhenVerifyTcbInfoFail)
 {
     // GIVEN
-    auto quote = quoteV3Generator.buildQuote();
+    auto [view, quote] = quoteV3Generator.buildQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(cert);
 
@@ -355,7 +355,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedTcbInfoFormatWhenVerifyTcbInfoFail
 TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedQeIdentityFormatWhenVerifyQEidentityFail)
 {
     // GIVEN
-    auto quote = quoteV3Generator.buildQuote();
+    auto [view, quote] = quoteV3Generator.buildQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(cert);
     auto tcbInfoBodyBytes = Bytes{};
@@ -375,7 +375,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedQeIdentityFormatWhenVerifyQEidenti
 TEST_F(VerifyQuoteIT, shouldReturnedUnsuportedQeIdentityFormatWhenQEIdentityIsWrong)
 {
     // GIVEN
-    auto quote = quoteV3Generator.buildQuote();
+    auto [view, quote] = quoteV3Generator.buildQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(cert);
     auto tcbInfoBodyBytes = Bytes{};
@@ -415,7 +415,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyQuoteV3Successffuly)
     quoteV3Generator.getAuthData().ecdsaSignature.signature =
             signAndGetRaw(concat(quoteV3Generator.getHeader().bytes(), quoteV3Generator.getEnclaveReport().bytes()), *pckCertKeyPtr);
 
-    auto quote = quoteV3Generator.buildQuote();
+    auto [view, quote] = quoteV3Generator.buildQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(interCert);
     auto tcbInfoBodyBytes = Bytes{};
@@ -462,7 +462,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyQuoteV3SuccessffulyWithNoQ
     quoteV3Generator.getAuthData().ecdsaSignature.signature =
             signAndGetRaw(concat(quoteV3Generator.getHeader().bytes(), quoteV3Generator.getEnclaveReport().bytes()), *pckCertKeyPtr);
 
-    auto quote = quoteV3Generator.buildQuote();
+    auto [view, quote] = quoteV3Generator.buildQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(interCert);
     auto tcbInfoBodyBytes = Bytes{};
@@ -517,7 +517,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifySgxQuoteV4Successffuly)
     quoteV4Generator.getAuthData().ecdsaSignature.signature =
             signAndGetRaw(concat(quoteV4Generator.getHeader().bytes(), quoteV4Generator.getEnclaveReport().bytes()), *pckCertKeyPtr);
 
-    auto quote = quoteV4Generator.buildSgxQuote();
+    auto [sgxQuoteView, sgxQuote] = quoteV4Generator.buildSgxQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(interCert);
     auto tcbInfoBodyBytes = Bytes{};
@@ -534,7 +534,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifySgxQuoteV4Successffuly)
                                                                              signatureQE));
 
     // WHEN
-    auto result = sgxAttestationVerifyQuote(quote.data(), (uint32_t) quote.size(), pckPem.c_str(), pckCrl.c_str(),
+    auto result = sgxAttestationVerifyQuote(sgxQuote.data(), (uint32_t) sgxQuote.size(), pckPem.c_str(), pckCrl.c_str(),
                                             tcbInfoJsonWithSignature.c_str(), qeIdentityJsonWithSignature.c_str());
 
     // THEN
@@ -575,7 +575,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifySgxQuoteV4WithoutQeIdentit
     quoteV4Generator.getAuthData().ecdsaSignature.signature =
             signAndGetRaw(concat(quoteV4Generator.getHeader().bytes(), quoteV4Generator.getEnclaveReport().bytes()), *pckCertKeyPtr);
 
-    auto quote = quoteV4Generator.buildSgxQuote();
+    auto [sgxQuoteView, sgxQuote] = quoteV4Generator.buildSgxQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(interCert);
     auto tcbInfoBodyBytes = Bytes{};
@@ -585,7 +585,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifySgxQuoteV4WithoutQeIdentit
                                                          EcdsaSignatureGenerator::signatureToHexString(signatureTcb));
 
     // WHEN
-    auto result = sgxAttestationVerifyQuote(quote.data(), (uint32_t) quote.size(), pckPem.c_str(), pckCrl.c_str(),
+    auto result = sgxAttestationVerifyQuote(sgxQuote.data(), (uint32_t) sgxQuote.size(), pckPem.c_str(), pckCrl.c_str(),
                                             tcbInfoJsonWithSignature.c_str(), nullptr);
 
     // THEN
@@ -642,7 +642,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyTdxQuoteV4Successfully)
     quoteV4Generator.getAuthData().ecdsaSignature.signature =
             signAndGetRaw(concat(quoteV4Generator.getHeader().bytes(), quoteV4Generator.getTdReport().bytes()), *pckCertKeyPtr);
 
-    auto quote = quoteV4Generator.buildTdxQuote();
+    const auto [view, quote] = quoteV4Generator.buildTdxQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(interCert);
     auto tcbInfoBodyBytes = Bytes{};
@@ -711,7 +711,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusTdxModuleMismatchWhenVerifyTdxQuoteV4W
     quoteV4Generator.getAuthData().ecdsaSignature.signature =
             signAndGetRaw(concat(quoteV4Generator.getHeader().bytes(), quoteV4Generator.getTdReport().bytes()), *pckCertKeyPtr);
 
-    auto quote = quoteV4Generator.buildTdxQuote();
+    const auto [view, quote] = quoteV4Generator.buildTdxQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(interCert);
     auto tcbInfoBodyBytes = Bytes{};
@@ -774,7 +774,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusTdxModuleMismatchWhenVerifyTdxQuoteV4W
     quoteV4Generator.getAuthData().ecdsaSignature.signature =
             signAndGetRaw(concat(quoteV4Generator.getHeader().bytes(), quoteV4Generator.getTdReport().bytes()), *pckCertKeyPtr);
 
-    auto quote = quoteV4Generator.buildTdxQuote();
+    const auto [view, quote] = quoteV4Generator.buildTdxQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(interCert);
     auto tcbInfoBodyBytes = Bytes{};
@@ -834,7 +834,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyTdxQuoteV4WithoutQeIdentit
     quoteV4Generator.getAuthData().ecdsaSignature.signature =
             signAndGetRaw(concat(quoteV4Generator.getHeader().bytes(), quoteV4Generator.getTdReport().bytes()), *pckCertKeyPtr);
 
-    auto quote = quoteV4Generator.buildTdxQuote();
+    const auto [view, quote] = quoteV4Generator.buildTdxQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(interCert);
     auto tcbInfoBodyBytes = Bytes{};
@@ -874,7 +874,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyQuoteV3WithSgxTcbInfoV3Suc
     quoteV3Generator.getAuthData().ecdsaSignature.signature =
     signAndGetRaw(concat(quoteV3Generator.getHeader().bytes(), quoteV3Generator.getEnclaveReport().bytes()), *pckCertKeyPtr);
 
-    auto quote = quoteV3Generator.buildQuote();
+    auto [view, quote] = quoteV3Generator.buildQuote();
     auto pckPem = certGenerator.x509ToString(cert.get());
     auto pckCrl = getValidCrl(interCert);
     auto tcbInfoBodyBytes = Bytes{};

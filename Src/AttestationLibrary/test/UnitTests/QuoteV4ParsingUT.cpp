@@ -36,6 +36,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock-matchers.h>
 
+#include "QuoteUtils.h"
+
 using namespace intel::sgx;
 namespace{
 
@@ -119,8 +121,10 @@ struct QuoteV4ParsingUT: public testing::Test
 
 TEST_F(QuoteV4ParsingUT, shouldNotDeserializeIfQuoteTooShort)
 {
-    const auto quote = dcap::test::QuoteV4Generator{}.buildSgxQuote();
-    EXPECT_FALSE(dcap::Quote{}.parse(std::vector<uint8_t>(quote.cbegin(), quote.cend()-2)));
+    const auto [quoteView, quote] = dcap::test::QuoteV4Generator{}.buildSgxQuote();
+
+    dcap::BufferView subView(quote.data(), quote.size() - 2);
+    EXPECT_FALSE(dcap::Quote{}.parse(subView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldParseStubQuoteWithMinimumSize)
@@ -134,7 +138,7 @@ TEST_F(QuoteV4ParsingUT, shouldParseStubQuoteWithMinimumSize)
 
     // WHEN
     dcap::Quote quote;
-    EXPECT_TRUE(quote.parse(gen.buildSgxQuote()));
+    EXPECT_TRUE(quote.parse(gen.buildSgxQuote().quoteView));
 
     // THEN
     EXPECT_TRUE(header == quote.getHeader());
@@ -146,14 +150,15 @@ TEST_F(QuoteV4ParsingUT, shouldParseEmptyHeader)
      // GIVEN
     const dcap::test::QuoteV4Generator::QuoteHeader testHeader{};
     const auto headerBytes = testHeader.bytes();
+    const auto headerView = dcap::test::getView(headerBytes); 
 
     // WHEN
-    auto from = headerBytes.begin();
+    auto from = headerView.cbegin();
     dcap::Header header;
-    header.insert(from, headerBytes.cend());
+    header.insert(from, headerView.cend());
 
     // THEN
-    ASSERT_TRUE(from == headerBytes.cend());
+    ASSERT_TRUE(from == headerView.cend());
     EXPECT_TRUE(testHeader == header);
 }
 
@@ -167,11 +172,11 @@ TEST_F(QuoteV4ParsingUT, shouldParseAndValidateQuoteHeader)
     testHeader.userData = {};
 
     gen.withHeader(testHeader);
-    const auto quote = gen.buildSgxQuote();
+    const auto [sgxQuoteView, sgxQuote] = gen.buildSgxQuote();
 
     dcap::Quote quoteObj;
 
-    ASSERT_TRUE(quoteObj.parse(quote));
+    ASSERT_TRUE(quoteObj.parse(sgxQuoteView));
     ASSERT_TRUE(quoteObj.validate());
 
     EXPECT_TRUE(testHeader == quoteObj.getHeader());
@@ -187,11 +192,11 @@ TEST_F(QuoteV4ParsingUT, shouldParseAndNotValidateBecauseAttestationKeyTypeNotSu
     testHeader.userData = {};
 
     gen.withHeader(testHeader);
-    const auto quote = gen.buildSgxQuote();
+    const auto [sgxQuoteView, sgxQuote] = gen.buildSgxQuote();
 
     dcap::Quote quoteObj;
 
-    ASSERT_TRUE(quoteObj.parse(quote));
+    ASSERT_TRUE(quoteObj.parse(sgxQuoteView));
     ASSERT_FALSE(quoteObj.validate());
 
     EXPECT_TRUE(testHeader == quoteObj.getHeader());
@@ -209,11 +214,11 @@ TEST_F(QuoteV4ParsingUT, shouldParseAndNotValidateBecauseQeVendorIdNotSupported)
 
 
     gen.withHeader(testHeader);
-    const auto quote = gen.buildSgxQuote();
+    const auto [sgxQuoteView, sgxQuote] = gen.buildSgxQuote();
 
     dcap::Quote quoteObj;
 
-    ASSERT_TRUE(quoteObj.parse(quote));
+    ASSERT_TRUE(quoteObj.parse(sgxQuoteView));
     ASSERT_FALSE(quoteObj.validate());
 
     EXPECT_TRUE(testHeader == quoteObj.getHeader());
@@ -230,11 +235,11 @@ TEST_F(QuoteV4ParsingUT, shouldParseButNotValidateBecauseVersionNotSupported)
     testHeader.userData = {};
 
     gen.withHeader(testHeader);
-    const auto quote = gen.buildSgxQuote();
+    const auto [sgxQuoteView, sgxQuote] = gen.buildSgxQuote();
 
     dcap::Quote quoteObj;
 
-    ASSERT_TRUE(quoteObj.parse(quote));
+    ASSERT_TRUE(quoteObj.parse(sgxQuoteView));
 
     EXPECT_TRUE(testHeader == quoteObj.getHeader());
     ASSERT_FALSE(quoteObj.validate());
@@ -250,11 +255,11 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseBecauseTeeTypeNotSupported)
     testHeader.userData = {};
 
     gen.withHeader(testHeader);
-    const auto quote = gen.buildSgxQuote();
+    const auto [sgxQuoteView, sgxQuote] = gen.buildSgxQuote();
 
     dcap::Quote quoteObj;
 
-    ASSERT_FALSE(quoteObj.parse(quote));
+    ASSERT_FALSE(quoteObj.parse(sgxQuoteView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldNotParseQuoteTDXHeaderWithEnclaveReport)
@@ -267,11 +272,11 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseQuoteTDXHeaderWithEnclaveReport)
     testHeader.userData = {};
 
     gen.withHeader(testHeader);
-    const auto quote = gen.buildSgxQuote();
+    const auto [sgxQuoteView, sgxQuote] = gen.buildSgxQuote();
 
     dcap::Quote quoteObj;
 
-    ASSERT_FALSE(quoteObj.parse(quote));
+    ASSERT_FALSE(quoteObj.parse(sgxQuoteView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldNotParseQuoteSGXHeaderWithTdReport)
@@ -284,11 +289,11 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseQuoteSGXHeaderWithTdReport)
     testHeader.userData = {};
 
     gen.withHeader(testHeader);
-    const auto quote = gen.buildTdxQuote();
+    const auto [view, quote] = gen.buildTdxQuote();
 
     dcap::Quote quoteObj;
 
-    ASSERT_FALSE(quoteObj.parse(quote));
+    ASSERT_FALSE(quoteObj.parse(view));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldParseAndValidateQuoteSGXHeader)
@@ -302,11 +307,11 @@ TEST_F(QuoteV4ParsingUT, shouldParseAndValidateQuoteSGXHeader)
     testHeader.userData = {};
 
     gen.withHeader(testHeader);
-    const auto quote = gen.buildSgxQuote();
+    const auto [sgxQuoteView, sgxQuote] = gen.buildSgxQuote();
 
     dcap::Quote quoteObj;
 
-    ASSERT_TRUE(quoteObj.parse(quote));
+    ASSERT_TRUE(quoteObj.parse(sgxQuoteView));
     ASSERT_TRUE(quoteObj.validate());
 
     EXPECT_TRUE(testHeader == quoteObj.getHeader());
@@ -323,11 +328,11 @@ TEST_F(QuoteV4ParsingUT, shouldParseAndValidateQuoteTDXHeader)
     testHeader.userData = {};
 
     gen.withHeader(testHeader);
-    const auto quote = gen.buildTdxQuote();
+    const auto [quoteView, quote] = gen.buildTdxQuote();
 
     dcap::Quote quoteObj;
 
-    ASSERT_TRUE(quoteObj.parse(quote));
+    ASSERT_TRUE(quoteObj.parse(quoteView));
     ASSERT_TRUE(quoteObj.validate());
 
     EXPECT_TRUE(testHeader == quoteObj.getHeader());
@@ -337,12 +342,13 @@ TEST_F(QuoteV4ParsingUT, shouldParseEnclaveReport)
 {
     const dcap::test::QuoteV4Generator::EnclaveReport testReport{};
     const auto bytes = testReport.bytes();
+    const auto view = dcap::test::getView(bytes);
 
-    auto from = bytes.begin();
+    auto from = view.cbegin();
     dcap::EnclaveReport report{};
-    report.insert(from, bytes.cend());
+    report.insert(from, view.cend());
 
-    ASSERT_TRUE(from == bytes.cend());
+    ASSERT_TRUE(from == view.cend());
     ASSERT_TRUE(testReport == report);
     ASSERT_THAT(report.rawBlob(), ::testing::ElementsAreArray(bytes));
 }
@@ -352,11 +358,13 @@ TEST_F(QuoteV4ParsingUT, shouldParseTDReport)
     const dcap::test::QuoteV4Generator::TDReport testReport{};
     const auto bytes = testReport.bytes();
 
-    auto from = bytes.begin();
-    dcap::TDReport10 report{};
-    report.insert(from, bytes.cend());
+    const auto view = dcap::test::getView(bytes);
 
-    ASSERT_TRUE(from == bytes.cend());
+    auto from = view.cbegin();
+    dcap::TDReport10 report{};
+    report.insert(from, view.cend());
+
+    ASSERT_TRUE(from == view.cend());
     EXPECT_TRUE(testReport == report);
     ASSERT_THAT(report.rawBlob(), ::testing::ElementsAreArray(bytes));
 }
@@ -373,7 +381,7 @@ TEST_F(QuoteV4ParsingUT, shouldParseQuoteBody)
 
     dcap::Quote quote;
 
-    ASSERT_TRUE(quote.parse(gen.buildSgxQuote()));
+    ASSERT_TRUE(quote.parse(gen.buildSgxQuote().quoteView));
     EXPECT_TRUE(testreport == quote.getEnclaveReport());
 }
 
@@ -381,12 +389,13 @@ TEST_F(QuoteV4ParsingUT, shouldParseQeAuthData)
 {
     dcap::test::QuoteV4Generator::QeAuthData testAuth{5, {1, 2, 3, 4, 5}};
     const auto bytes = testAuth.bytes();
+    const auto view = dcap::test::getView(bytes);
 
-    auto from = bytes.begin();
+    auto from = view.cbegin();
     dcap::QeAuthData auth;
-    auth.insert(from, bytes.cend());
+    auth.insert(from, view.cend());
 
-    ASSERT_TRUE(from == bytes.cend());
+    ASSERT_TRUE(from == view.cend());
     EXPECT_EQ(5, auth.parsedDataSize);
     EXPECT_EQ(5, auth.data.size());
     EXPECT_EQ(testAuth.data, auth.data);
@@ -396,25 +405,26 @@ TEST_F(QuoteV4ParsingUT, shouldParseQeAuthWithShorterDataButPointerShouldNotBeMo
 {
     dcap::test::QuoteV4Generator::QeAuthData testAuth{5, {1, 2, 3, 4}};
     const auto bytes = testAuth.bytes();
+    const auto view = dcap::test::getView(bytes);
 
-    auto from = bytes.begin();
+    auto from = view.cbegin();
     dcap::QeAuthData auth;
-    auth.insert(from, bytes.cend());
+    auth.insert(from, view.cend());
 
-    ASSERT_TRUE(from == bytes.begin());
+    ASSERT_TRUE(from == view.cbegin());
     EXPECT_EQ(5, auth.parsedDataSize);
     EXPECT_EQ(0, auth.data.size());
 }
 
 TEST_F(QuoteV4ParsingUT, shouldNotParseTooShortQuote)
 {
-    auto quoteBytes = dcap::test::QuoteV4Generator{}.buildSgxQuote();
-    std::vector<uint8_t> tooShortQuote;
-    tooShortQuote.reserve(quoteBytes.size() - 1);
-    std::copy(quoteBytes.begin(), quoteBytes.end() - 1, std::back_inserter(tooShortQuote));
+    auto [quoteView, quoteBytes] = dcap::test::QuoteV4Generator{}.buildSgxQuote();
+    std::vector<uint8_t> tooShortQuote(quoteBytes.begin(), quoteBytes.end() - 1);
+    
+    const auto tooShortView = dcap::test::getView(tooShortQuote);
 
     dcap::Quote quote;
-    EXPECT_FALSE(quote.parse(tooShortQuote));
+    EXPECT_FALSE(quote.parse(tooShortView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldNotParseIfAuthDataSizeBiggerThanRemaingData)
@@ -422,7 +432,7 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseIfAuthDataSizeBiggerThanRemaingData)
     ++gen.getAuthSize();
 
     dcap::Quote quote;
-    EXPECT_FALSE(quote.parse(gen.buildSgxQuote()));
+    EXPECT_FALSE(quote.parse(gen.buildSgxQuote().quoteView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldNotParseIfAuthDataSizeSmallerThanRemainingData)
@@ -430,7 +440,7 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseIfAuthDataSizeSmallerThanRemainingData)
     --gen.getAuthSize();
 
     dcap::Quote quote;
-    EXPECT_FALSE(quote.parse(gen.buildSgxQuote()));
+    EXPECT_FALSE(quote.parse(gen.buildSgxQuote().quoteView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldParseCustomQeAuth)
@@ -446,7 +456,7 @@ TEST_F(QuoteV4ParsingUT, shouldParseCustomQeAuth)
     gen.getAuthData().authDataSize += 3; // qeAuthData.size
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(gen.buildSgxQuote()));
+    ASSERT_TRUE(quote.parse(gen.buildSgxQuote().quoteView));
     EXPECT_TRUE(certificationData == quote.getAuthDataV4().certificationData);
 }
 
@@ -463,7 +473,7 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseWhenQuoteAuthDataSizeMatchButQeAuthDataSi
     gen.getAuthData().authDataSize += 3 + 1; // qeAuthData.size + 1
 
     dcap::Quote quote;
-    EXPECT_FALSE(quote.parse(gen.buildSgxQuote()));
+    EXPECT_FALSE(quote.parse(gen.buildSgxQuote().quoteView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldNotParseWhenQuoteAuthDataSizeMatchButQeAuthDataSizeAreTooMuch)
@@ -479,8 +489,8 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseWhenQuoteAuthDataSizeMatchButQeAuthDataSi
     gen.getAuthData().authDataSize += 3; // correct qeAuthData.size
 
     dcap::Quote quote;
-	auto builtQuote = gen.buildSgxQuote();
-    EXPECT_FALSE(quote.parse(builtQuote));
+	  auto [sgxQuoteView, sgxQuote] = gen.buildSgxQuote();
+    EXPECT_FALSE(quote.parse(sgxQuoteView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldParseCertificationData)
@@ -494,7 +504,7 @@ TEST_F(QuoteV4ParsingUT, shouldParseCertificationData)
     gen.getAuthData().authDataSize += 4; // certificationData.size
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(gen.buildSgxQuote()));
+    ASSERT_TRUE(quote.parse(gen.buildSgxQuote().quoteView));
     EXPECT_EQ(qeReportCertificationData.certificationData.keyData, quote.getCertificationData().data);
     EXPECT_EQ(qeReportCertificationData.certificationData.keyDataType, quote.getCertificationData().type);
     EXPECT_EQ(qeReportCertificationData.certificationData.size, quote.getCertificationData().parsedDataSize);
@@ -513,7 +523,7 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseWhenAuthDataSizeMatchButCertificationData
     gen.getAuthData().authDataSize += 4 + 3; // certificationData.size + qeAuthData.size
 
     dcap::Quote quote;
-    ASSERT_FALSE(quote.parse(gen.buildSgxQuote()));
+    ASSERT_FALSE(quote.parse(gen.buildSgxQuote().quoteView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldNotParseWhenAuthDataSizeMatchButCertificationDataParsedSizeIsTooMuch)
@@ -529,7 +539,7 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseWhenAuthDataSizeMatchButCertificationData
     gen.getAuthData().authDataSize += 5 + 3; // certificationData.size + qeAuthData.size
 
     dcap::Quote quote;
-    ASSERT_FALSE(quote.parse(gen.buildSgxQuote()));
+    ASSERT_FALSE(quote.parse(gen.buildSgxQuote().quoteView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldNotParseWhenAuthDataSizeMatchButQeAuthDataParsedSizeIsTooMuch)
@@ -545,7 +555,7 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseWhenAuthDataSizeMatchButQeAuthDataParsedS
     gen.getAuthData().authDataSize += 4 + 3; // certificationData.size + qeAuthData.size
 
     dcap::Quote quote;
-    ASSERT_FALSE(quote.parse(gen.buildSgxQuote()));
+    ASSERT_FALSE(quote.parse(gen.buildSgxQuote().quoteView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldParseQeAuthAndQeCert)
@@ -561,7 +571,7 @@ TEST_F(QuoteV4ParsingUT, shouldParseQeAuthAndQeCert)
     gen.getAuthData().authDataSize += 4 + 3; // certificationData.size + qeAuthData.size
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(gen.buildSgxQuote()));
+    ASSERT_TRUE(quote.parse(gen.buildSgxQuote().quoteView));
 }
 
 TEST_F(QuoteV4ParsingUT, shouldNotValidateQeAuthAndQeCertWithUnsupportedType)
@@ -573,7 +583,7 @@ TEST_F(QuoteV4ParsingUT, shouldNotValidateQeAuthAndQeCertWithUnsupportedType)
     gen.withCertificationData(certificationData);
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(gen.buildSgxQuote()));
+    ASSERT_TRUE(quote.parse(gen.buildSgxQuote().quoteView));
     ASSERT_FALSE(quote.validate());
 }
 
@@ -583,6 +593,6 @@ TEST_F(QuoteV4ParsingUT, shouldNotParseCertificationDataWithUnsupportedType)
     gen.withCertificationData(certificationData);
 
     dcap::Quote quote;
-    ASSERT_TRUE(quote.parse(gen.buildSgxQuote()));
+    ASSERT_TRUE(quote.parse(gen.buildSgxQuote().quoteView));
     ASSERT_FALSE(quote.validate());
 }
