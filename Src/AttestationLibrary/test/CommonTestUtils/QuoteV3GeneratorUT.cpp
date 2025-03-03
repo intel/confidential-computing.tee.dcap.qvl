@@ -264,15 +264,3 @@ TEST_F(QuoteV3GeneratorTests, withArbitraryPckDataShouldBeParsable)
     ASSERT_TRUE(quote.parse(generatedQuote.quoteView));
 }
 
-TEST_F(QuoteV3GeneratorTests, checkBufferViewGeneration)
-{
-    // GIVEN
-    test::QuoteV3Generator generator;
-    const Bytes pckData{'p', 'c', 'k', 'd', 'a', 't', 'a'};
-
-    // WHEN
-    const auto bufferView = test::getView(pckData);
-
-    // WHEN
-    ASSERT_TRUE( std::equal(pckData.begin(), pckData.end(), bufferView.cbegin(), bufferView.cend()) );
-}

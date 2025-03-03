@@ -32,6 +32,8 @@
 #include <gtest/gtest.h>
 #include <Utils/BufferView.h>
 
+#include <QuoteUtils.h>
+
 using namespace intel::sgx;
 
 TEST(BufferViewUT, size)
@@ -105,3 +107,14 @@ TEST(BufferViewUT, advance)
   EXPECT_EQ(buffer[3], *position);
 }
 
+TEST(BufferViewUT, checkBufferViewGeneration)
+{
+  // GIVEN
+  const std::vector<uint8_t> pckData{'p', 'c', 'k', 'd', 'a', 't', 'a'};
+
+  // WHEN
+  const auto bufferView = dcap::test::getView(pckData);
+
+  // WHEN
+  ASSERT_TRUE( std::equal(pckData.begin(), pckData.end(), bufferView.cbegin(), bufferView.cend()) );
+}
