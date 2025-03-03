@@ -257,7 +257,7 @@ QuoteV3Generator& QuoteV3Generator::withCertificationData(uint16_t type, const B
 dcap::test::TestQuote QuoteV3Generator::buildQuote()
 {
   auto quote = header.bytes() + enclaveReport.bytes() + quoteAuthData.bytes();
-	return TestQuote {
+  return TestQuote {
     getView(quote),
     std::move(quote) 
   };

@@ -224,7 +224,7 @@ QuoteV4Generator& QuoteV4Generator::withCertificationData(uint16_t type, const B
 dcap::test::TestQuote QuoteV4Generator::buildSgxQuote()
 {
   auto quoteBytes = header.bytes() + enclaveReport.bytes() + quoteAuthData.bytes();
-	return dcap::test::TestQuote {
+  return dcap::test::TestQuote {
     dcap::test::getView(quoteBytes),
     std::move(quoteBytes)
   }; 
