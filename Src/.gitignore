@@ -9,4 +9,9 @@ Debug
 Release
 packages
 .vs
+
+# editor
 *.swp
+*.ycm_extra_conf.py*
+compile_commands.json
+.cache
