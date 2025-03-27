@@ -35,34 +35,39 @@ param (
 	[String]$buildTools
 )
 
-function Invoke-VS-Env {
+function Check-Path {
 	param(
-		[int] $vs
+		[String] $path
 	)
-	$scriptName = $(
-	Get-Childitem -Path "C:\Program Files*\Microsoft Visual Studio\$vs\*\VC\Auxiliary\Build\vcvars64.bat" -Recurse |
-			Select-Object FullName |
-			Select-Object -Last 1
-	).FullName
+	$resolvedPath = $(
+        Get-Childitem -Path "$path" -Recurse |
+                Select-Object FullName |
+                Select-Object -Last 1
+        ).FullName
 
-	if ([string]::IsNullOrWhiteSpace($scriptName)) {
-		Write-Error "Environment for Visual Studio $vs was not found"
+	if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
+		Write-Error "Path $path was not found"
 		exit 1
 	}
-	# Run vcvars64 and get environment variables
-	$cmdline = """$scriptName"" & set"
-	& cmd.exe /c $cmdline | Foreach-Object {
-		if ($_ -match "^(.*?)=(.*)$")
-		{
-			Set-Content "env:\$($matches[1])" $matches[2]
-		}
-	}
+	return $resolvedPath
 }
-
-Invoke-VS-Env $vs
 
 New-Item -ItemType Directory -Force -Path ${PSScriptRoot}\Build
 $cwd = Get-Location
+
+$vsPath = "C:\Program Files*\Microsoft Visual Studio\$vs\"
+$vcvarsPath = Check-Path "$vsPath\*\VC\Auxiliary\Build\vcvars64.bat"
+$cmakePath = Check-Path "$vsPath\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+$ctestPath = Check-Path "$vsPath\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
+
+# Run vcvars64 and get environment variables
+$cmdline = """$vcvarsPath"" & set"
+& cmd.exe /c $cmdline | Foreach-Object {
+    if ($_ -match "^(.*?)=(.*)$")
+    {
+        Set-Content "env:\$($matches[1])" $matches[2]
+    }
+}
 
 $generator = "Visual Studio 15 2017"
 if ($vs -eq 2019) {
@@ -89,7 +94,7 @@ else {
 }
 
 Write-Host "Running CMake with arguments: $cmakeGenerateArguments"
-& cmake $cmakeGenerateArguments
+& $cmakePath $cmakeGenerateArguments
 if($LastExitCode -ne 0)
 {
 	Write-Error "CMake generation failed: $LastExitCode"
@@ -98,8 +103,8 @@ if($LastExitCode -ne 0)
 }
 
 Write-Host "Running MSBuild"
-$cmakeBuildlArguments = @('--build', "${PSScriptRoot}\Build", "--config", "Release", "--target", "install")
-& cmake $cmakeBuildlArguments
+$cmakeBuildArguments = @('--build', "${PSScriptRoot}\Build", "--config", "Release", "--target", "install")
+& $cmakePath $cmakeBuildArguments
 if($LastExitCode -ne 0)
 {
     Write-Error "CMake build failed: $LastExitCode"
@@ -109,7 +114,7 @@ if($LastExitCode -ne 0)
 
 Write-Host "Running tests"
 $ctestArguments = @("-C", "Release", "--test-dir", "${PSScriptRoot}\Build")
-& ctest $ctestArguments
+& $ctestPath $ctestArguments
 if($LastExitCode -ne 0)
 {
 	Write-Error "CTest failed: $LastExitCode"
