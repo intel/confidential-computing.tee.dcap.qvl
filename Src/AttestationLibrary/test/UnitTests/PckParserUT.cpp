@@ -31,6 +31,7 @@
 
 #include <gtest/gtest.h>
 #include <PckParser/PckParser.h>
+#include <iomanip>
 
 using namespace testing;
 using namespace intel::sgx::dcap::pckparser;
