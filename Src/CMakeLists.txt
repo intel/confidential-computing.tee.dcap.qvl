@@ -166,8 +166,8 @@ option(HUNTER_KEEP_PACKAGE_SOURCES "Keep third party sources" ON)
 
 include("${CMAKE_CURRENT_LIST_DIR}/ThirdParty/hunter/HunterGate.cmake")
 HunterGate(
-		URL "https://github.com/cpp-pm/hunter/archive/v0.25.6.tar.gz"
-		SHA1 "69e4a05bd514bb05cb2c5aa02ce8ac420516aaf7"
+		URL "https://github.com/cpp-pm/hunter/archive/v0.25.8.tar.gz"
+		SHA1 "26c79d587883ec910bce168e25f6ac4595f97033"
 		FILEPATH "${CMAKE_SOURCE_DIR}/ThirdParty/hunter/config.cmake"
 )
 
