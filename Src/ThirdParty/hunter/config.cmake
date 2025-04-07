@@ -26,7 +26,7 @@
 
 hunter_config(OpenSSL VERSION "3.0.12")
 hunter_config(GTest
-        VERSION "1.15.2"
+        VERSION "1.13.0" # 1.14 requires CMake 3.13. VS 2017 (CMake 3.12) does not support it. In turn CMake 4.0 won't build GTest 1.13
         CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_CODE=TRUE)
 
 hunter_config(spdlog

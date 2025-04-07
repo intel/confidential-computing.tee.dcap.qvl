@@ -30,7 +30,7 @@ This library provides ra reference implementation for parsing ECDSA Attestation 
 ### Linux
 Requirements:
 
-* cmake version 3.18 or higher
+* CMake version 3.18 or higher (CMake 4.0 cannot build GTest for unit tests due to dropped support for CMake 3.5)
 * make
 * clang++ with c++11 support (version 5.0.2 or higher is recommended)
 * doxygen version 1.8.14 if BUILD_DOCS is enabled
