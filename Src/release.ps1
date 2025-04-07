@@ -32,7 +32,9 @@ param (
 	[Parameter(Mandatory=$false)]
 	[int]$vs = 2017,
 	[Parameter(Mandatory=$false)]
-	[String]$buildTools
+	[String]$buildTools,
+	[Parameter(Mandatory=$false)]
+	[String]$cmakePath
 )
 
 function Check-Path {
@@ -49,6 +51,7 @@ function Check-Path {
 		Write-Error "Path $path was not found"
 		exit 1
 	}
+	Write-Host "Resolved path: $resolvedPath"
 	return $resolvedPath
 }
 
@@ -56,26 +59,40 @@ New-Item -ItemType Directory -Force -Path ${PSScriptRoot}\Build
 $cwd = Get-Location
 
 $vsPath = "C:\Program Files*\Microsoft Visual Studio\$vs\"
-$vcvarsPath = Check-Path "$vsPath\*\VC\Auxiliary\Build\vcvars64.bat"
-$cmakePath = Check-Path "$vsPath\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-$ctestPath = Check-Path "$vsPath\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
+$vcvarsPath = Check-Path "$vsPath*\VC\Auxiliary\Build\vcvars64.bat"
+if (-not [string]::IsNullOrWhiteSpace($cmakePath)) {
+	$cmakePath = Check-Path $cmakePath
+} else {
+	$cmakePath = Check-Path "$vsPath*\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+}
+$ctestPath = Check-Path "$vsPath*\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
 
 # Run vcvars64 and get environment variables
 $cmdline = """$vcvarsPath"" & set"
 & cmd.exe /c $cmdline | Foreach-Object {
-    if ($_ -match "^(.*?)=(.*)$")
+    if ($_ -match "^([^ ]*?)=(.*)$")
     {
-        Set-Content "env:\$($matches[1])" $matches[2]
+        if ($matches.Count -eq 3) {
+			# Write-Host "Setting environment variable: $_"
+            Set-Content "env:\$($matches[1])" $matches[2]
+        } else {
+            Write-Host "Skipping invalid environment variable: $_"
+        }
     }
+}
+if ($LastExitCode -ne 0) {
+    Write-Error "$vcvarsPath failed: $LastExitCode"
+    Set-Location -Path $cwd
+    exit $LastExitCode
 }
 
 $generator = "Visual Studio 15 2017"
 if ($vs -eq 2019) {
-	$generator = "Visual Studio 16 2019"
+    $generator = "Visual Studio 16 2019"
 }
 
 if ($vs -eq 2022) {
-	$generator = "Visual Studio 17 2022"
+    $generator = "Visual Studio 17 2022"
 }
 
 $cmakeGenerateArguments = @('-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_CONFIGURATION_TYPES="Release"', '-DBUILD_TEE=ON', '-G', $generator, '-A', 'x64')
@@ -113,7 +130,7 @@ if($LastExitCode -ne 0)
 }
 
 Write-Host "Running tests"
-$ctestArguments = @("-C", "Release", "--test-dir", "${PSScriptRoot}\Build")
+$ctestArguments = @("-C", "Release", "--verbose", "--test-dir", "${PSScriptRoot}\Build")
 & $ctestPath $ctestArguments
 if($LastExitCode -ne 0)
 {
