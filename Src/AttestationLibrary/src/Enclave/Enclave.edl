@@ -54,6 +54,15 @@ enclave {
 		                                       [in, string] const char* tcbInfoJson,
 		                                       [in, string] const char* qeIdentityJson);
 
+        public int   sgxAttestationVerifyQuoteEx([in, size=quoteSize] const uint8_t* quote,
+                                                 uint32_t quoteSize,
+                                                 [in, string] const char *pemPckCertificate,
+                                                 [in, string] const char* intermediateCrl,
+                                                 [in, string] const char* tcbInfoJson,
+                                                 [in, string] const char* qeIdentityJson,
+                                                 [out, size=verificationCollateralInfoSize] uint8_t* verificationCollateralInfo,
+                                                 uint32_t verificationCollateralInfoSize);
+
 		public int   sgxAttestationVerifyPCKCertificate([in, string] const char *pemCertChain,
 		                                                [in, count=2] char **crls,
 		                                                [in, string] const char *pemRootCaCertificate,

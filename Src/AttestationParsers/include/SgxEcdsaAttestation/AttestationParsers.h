@@ -77,6 +77,7 @@ namespace intel { namespace sgx { namespace dcap { namespace parser
 
         class TcbInfo;
         class TcbLevel;
+        class IdentityTcbLevel;
 
         class ATTESTATION_PARSERS_API TcbComponent
         {
@@ -430,6 +431,8 @@ namespace intel { namespace sgx { namespace dcap { namespace parser
              *          - OutOfDate
              *          - OutOfDateConfigurationNeeded
              *          - Revoked
+             * @param tcbDate - Date and time when the TCB level was certified not to be vulnerable to any issues described in SAs that were published on or prior to this date.
+             * @param advisoryIDs - Vector of strings representing security advisory IDs describing vulnerabilities that this TCB level is vulnerable to, e.g. [ "INTEL-SA-00079", "INTEL-SA-00076" ]
              * @return the value for given component
              *
              */
@@ -437,7 +440,9 @@ namespace intel { namespace sgx { namespace dcap { namespace parser
                      const std::vector<TcbComponent>& sgxTcbComponents,
                      const std::vector<TcbComponent>& tdxTcbComponents,
                      const uint32_t pceSvn,
-                     const std::string& status);
+                     const std::string& status,
+                     const std::time_t tcbDate = 0,
+                     std::vector<std::string> advisoryIDs = {});
 
             virtual ~TcbLevel() = default;
             virtual bool operator>(const TcbLevel& other) const;
@@ -548,6 +553,193 @@ namespace intel { namespace sgx { namespace dcap { namespace parser
             friend class TcbInfo;
         };
 
+        /**
+         * Exception when Enclave Report having ISVSVN on level 1 and with enclave identity having tcbs on 2,3,4
+         */
+        class ATTESTATION_PARSERS_API StatusNotSupportedException : public std::exception
+        {
+        public:
+            explicit StatusNotSupportedException(const std::string message_) : message(message_) {}
+            const char *what() const noexcept override{ return this->message.c_str(); }
+        protected:
+            std::string message;
+        };
+
+        /*
+         * Enum representing Enclave ID
+         */
+        enum ATTESTATION_PARSERS_API EnclaveID
+        {
+            QE, QVE, TD_QE
+        };
+
+        enum class ATTESTATION_PARSERS_API TcbStatus {
+            UpToDate,
+            ConfigurationNeeded,
+            OutOfDate,
+            OutOfDateConfigurationNeeded,
+            Revoked,
+        };
+
+        class ATTESTATION_PARSERS_API EnclaveIdentity
+        {
+        public:
+            enum Version : uint32_t
+            {
+                V2 = 2
+            };
+
+            EnclaveIdentity() = default;
+            virtual ~EnclaveIdentity() = default;
+
+            /**
+             * Get identifier of EnclaveIdentity structure
+             * @return string with identifier
+             */
+            virtual EnclaveID getID() const;
+
+            /**
+             * Get version of EnclaveIdentity structure
+             * @return unsigned integer with version number
+             */
+            virtual uint32_t getVersion() const;
+
+            /**
+             * Get date and time when EnclaveIdentity was created in UTC
+             * @return std::time_t object with issue date
+             */
+            virtual std::time_t getIssueDate() const;
+
+            /**
+             * Get date and time by which next EnclaveIdentity will be issued in UTC
+             * @return std::time_t object with next update date
+             */
+            virtual std::time_t getNextUpdate() const;
+
+            /**
+             * Get a monotonically increasing sequence number changed when Intel updates the content of the TCB evaluation
+             * data set: TCB Info, QE Identity and QVE Identity.The tcbEvaluationDataNumber update is synchronized across
+             * TCB Info for all flavors of SGX CPUs (Family-Model-Stepping-Platform-CustomSKU) and QE/QVE Identity.
+             * This sequence number allows users to easily determine when a particular TCB Info/QE Identity/QVE Identity
+             * supersedes another TCB Info/QE Identity/QVE Identity.
+             *
+             * @return unsigned integer representing TCB Evaluation Data Number
+             *
+             * @throws intel::sgx::dcap::parser::FormatException in case of EnclaveIdentity version equal 1
+             */
+            virtual uint32_t getTcbEvaluationDataNumber() const;
+
+            /**
+             * Get mrSigner
+             * @return vector of bytes representing the measurement of a mrSigner (16 bytes with SHA256 hash).
+             */
+            virtual const std::vector<uint8_t>& getMrsigner() const;
+
+            /**
+             * Get attributes
+             * @return vector of bytes representing attributes "golden" value (upon applying mask, value: 16 bytes).
+             */
+            virtual const std::vector<uint8_t>& getAttributes() const;
+
+            /**
+             * Get attributes mask
+             * @return vector of bytes representing representing mask to be applied to attributes
+             * value retrieved from the platform (value: 16 bytes set to 0xFF).
+             */
+            virtual const std::vector<uint8_t>& getAttributesMask() const;
+
+            /**
+             * Get miscselect
+             * @return vector of bytes representing miscselect "golden" value (upon applying mask, value: 4 bytes).
+             */
+            virtual const std::vector<uint8_t>& getMiscselect() const;
+
+            /**
+             * Get miscselect mask
+             * @return vector of bytes representing representing mask to be applied to miscselect
+             * value retrieved from the platform (value: 4 bytes set to 0xFF).
+             */
+            virtual const std::vector<uint8_t>& getMiscselectMask() const;
+
+            /**
+             * Get isvProdId
+             * @return unsigned integer with Enclave Product ID
+             */
+            virtual uint32_t getIsvProdId() const;
+
+            /**
+             * Get sorted list of identityTcbLevels for given enclaveIdentity
+             * @return array of IdentityTcbLevel objects
+             */
+            virtual const std::set<IdentityTcbLevel, std::greater<IdentityTcbLevel>>& getIdentityTcbLevels() const;
+
+            /**
+             * Get raw enclaveIdentity body data
+             * @return vector of bytes with raw data
+             */
+            virtual const std::vector<uint8_t>& getBody() const;
+
+            /**
+             * Get signature over enclaveIdentity body (without whitespaces) using TCB Signing Key
+             * @return vector of bytes representing signature
+             */
+            virtual const std::vector<uint8_t>& getSignature() const;
+
+            virtual IdentityTcbLevel getTcbLevel(uint32_t isvSvn) const;
+
+            /**
+             * Staic function that parses JSON text from a string into EnclaveIdentity object
+             * @param string with text in JSON Format
+             * @return EnclaveIdentity instance
+             *
+             * @throws intel::sgx::dcap::parser::FormatException in case of parsing error
+             */
+            static EnclaveIdentity parse(const std::string& jsonString);
+
+        private:
+            EnclaveID _id;
+            uint32_t _version;
+            time_t _issueDate;
+            time_t _nextUpdate;
+            uint32_t _tcbEvaluationDataNumber;
+            std::vector<uint8_t> _attributes;
+            std::vector<uint8_t> _attributesMask;
+            std::vector<uint8_t> _miscselect;
+            std::vector<uint8_t> _miscselectMask;
+            std::vector<uint8_t> _mrSigner;
+            uint32_t _isvProdId;
+            std::set<IdentityTcbLevel, std::greater<IdentityTcbLevel>> _identityTcbLevels;
+            std::vector<uint8_t> _body;
+            std::vector<uint8_t> _signature;
+
+            explicit EnclaveIdentity(const std::string& jsonString);
+        };
+
+        class ATTESTATION_PARSERS_API IdentityTcbLevel
+        {
+        public:
+            IdentityTcbLevel(const uint32_t isvSvn,
+                             const time_t tcbDate,
+                             const TcbStatus tcbStatus,
+                             const std::vector<std::string>& advisoryIds);
+
+            virtual ~IdentityTcbLevel() = default;
+            virtual bool operator>(const IdentityTcbLevel& other) const;
+
+            virtual uint32_t getIsvsvn() const;
+            virtual time_t getTcbDate() const;
+            virtual TcbStatus getTcbStatus() const;
+            virtual const std::vector<std::string>& getAdvisoryIds() const;
+
+        private:
+            uint32_t _isvSvn;
+            time_t _tcbDate;
+            TcbStatus _tcbStatus;
+            std::vector<std::string> _advisoryIds{};
+
+            explicit IdentityTcbLevel(const ::rapidjson::Value& tcbLevel);
+            friend class EnclaveIdentity;
+        };
     }
 
     namespace x509
@@ -1253,6 +1445,15 @@ namespace intel { namespace sgx { namespace dcap { namespace parser
      * Exception when invalid extension is found in certificate
      */
     class ATTESTATION_PARSERS_API InvalidExtensionException : public std::logic_error
+    {
+    public:
+        using std::logic_error::logic_error;
+    };
+
+    /**
+     * Exception when a structure has invalid version
+     */
+    class ATTESTATION_PARSERS_API InvalidVersionException : public std::logic_error
     {
     public:
         using std::logic_error::logic_error;

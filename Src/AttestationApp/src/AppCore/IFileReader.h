@@ -51,6 +51,7 @@ struct IFileReader
 
     virtual std::string readContent(const std::string& filePath) const = 0;
     virtual std::vector<uint8_t> readBinaryContent(const std::string& filePath) const = 0;
+    virtual void saveBinaryContent(const std::string& filePath, const std::vector<uint8_t> content) const = 0;
 };
 
 }}}

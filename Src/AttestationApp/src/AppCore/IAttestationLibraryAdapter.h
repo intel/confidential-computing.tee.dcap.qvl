@@ -49,7 +49,8 @@ struct IAttestationLibraryAdapter
                                const std::string& pckCertChain,
                                const std::string& pckCrl,
                                const std::string& tcbInfo,
-                               const std::string& qeIdentity) const = 0;
+                               const std::string& qeIdentity,
+                               std::vector<uint8_t>& verificationCollateralInfo) const = 0;
 
     virtual Status verifyPCKCertificate(const std::string& pemCertChain,
                                         const std::string& pemRootCaCRL,

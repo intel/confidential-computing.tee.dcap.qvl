@@ -33,7 +33,9 @@
 #define SGXECDSAATTESTATION_ENCLAVEREPORTVERIFIER_H
 
 #include "QuoteVerification/Quote.h"
-#include "EnclaveIdentityV2.h"
+#include "QuoteVerification/VerificationCollateralInfo.h"
+#include "SgxEcdsaAttestation/AttestationParsers.h"
+#include "SgxEcdsaAttestation/QuoteVerification.h"
 
 #include <vector>
 #include <memory>
@@ -44,7 +46,9 @@ class EnclaveReportVerifier {
 
 public:
     virtual ~EnclaveReportVerifier() = default;
-    virtual Status verify(const EnclaveIdentityV2 *enclaveIdentity, const EnclaveReport& enclaveReport) const;
+    virtual Status verify(const parser::json::EnclaveIdentity *enclaveIdentity,
+                          const EnclaveReport& enclaveReport,
+                          VerificationCollateralInfo *verificationCollateralInfo = nullptr) const;
 
 private:
     uint32_t vectorToUint32(const std::vector<uint8_t>& input) const;

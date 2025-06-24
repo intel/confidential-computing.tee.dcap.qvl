@@ -31,9 +31,12 @@
 
 #include "TdxModuleCheck.h"
 #include "Utils/StatusPrinter.h"
-#include "Verifiers/TcbStatus.h"
+#include "Utils/StatusUtils.h"
 
 namespace intel::sgx::dcap {
+
+static const std::set<std::string> VALID_MODULE_TCB_STATUSES =
+        {{ "UpToDate", "OutOfDate", "Revoked" }};
 
 Optional<TdxModuleIdentity> findTdxModuleIdentity(std::vector<TdxModuleIdentity> tdxModuleIdentities,
                                                        const uint8_t tdxModuleVersion)
@@ -61,7 +64,8 @@ Optional<TdxModuleIdentity> findTdxModuleIdentity(std::vector<TdxModuleIdentity>
 
 Status checkTdxModuleTcbStatus(const TcbInfo &tcbInfo,
                                const Quote &quote,
-                               Optional<TdxModuleIdentity> &tdxModuleIdentity)
+                               Optional<TdxModuleIdentity> &tdxModuleIdentity,
+                               VerificationCollateralInfo& verificationCollateralInfo)
 {
     const auto &tdxModuleVersion = quote.getTeeTcbSvn()[1];
     const auto &tdxModuleIsvSvn = quote.getTeeTcbSvn()[0];
@@ -93,6 +97,10 @@ Status checkTdxModuleTcbStatus(const TcbInfo &tcbInfo,
     }
     LOG_INFO("TDX Module - Matched to Identity TCB Level with ISVSVN({}) and status({}) from ID({})",
              tdxModuleTcbLevel->getTcb().getIsvSvn(), tdxModuleTcbLevel->getStatus(), tdxModuleIdentity->getId());
+
+    /// 4.1.2.5.19
+    verificationCollateralInfo.addTdxModuleData(*tdxModuleTcbLevel);
+
     return stringToTcbStatus(tdxModuleTcbLevel->getStatus(), VALID_MODULE_TCB_STATUSES);
 }
 

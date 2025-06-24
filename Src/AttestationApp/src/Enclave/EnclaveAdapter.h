@@ -45,7 +45,7 @@ public:
     std::string getVersion() const;
 
     int verifyQuote(const uint8_t* rawQuote, uint32_t quoteSize, const char *pemPckCertificate, const char* pckCrl,
-                    const char* tcbInfoJson, const char* qeIdentityJson) const;
+                    const char* tcbInfoJson, const char* qeIdentityJson, uint8_t* verificationCollateralInfo, uint32_t verificationCollateralInfoSize) const;
 
     int verifyPCKCertificate(const char *pemCertChain, const char *const crls[], const char *pemRootCaCertificate, const time_t* expirationDate) const;
     int verifyTCBInfo(const char *tcbInfo, const char *pemCertChain, const char *pemRootCaCrl, const char *pemRootCaCertificate, const time_t* expirationDate) const;

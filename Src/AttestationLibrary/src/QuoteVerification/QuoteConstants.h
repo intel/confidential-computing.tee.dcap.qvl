@@ -37,6 +37,7 @@
 // includes needed on Fedora 32
 #include <cstddef>
 #include <cstdint>
+#include <ctime>
 
 namespace intel { namespace sgx { namespace dcap { namespace constants {
 
@@ -97,6 +98,25 @@ const std::array<uint8_t, 16> INTEL_QE_VENDOR_ID = {{ 0x93, 0x9A, 0x72, 0x33, 0x
             ENCLAVE_REPORT_BYTE_LEN +
             AUTH_DATA_SIZE_BYTE_LEN +
             AUTH_DATA_MIN_BYTE_LEN;
+
+    constexpr size_t VERIFICATION_COLLATERAL_INFO_ID_SIZE_BYTE_LEN = 2;
+    constexpr size_t VERIFICATION_COLLATERAL_INFO_VERSION_SIZE_BYTE_LEN = 2;
+    constexpr size_t VERIFICATION_COLLATERAL_INFO_ISSUE_DATE_MIN_SIZE_BYTE_LEN = sizeof(time_t);
+    constexpr size_t VERIFICATION_COLLATERAL_INFO_ISSUE_DATE_MAX_SIZE_BYTE_LEN = sizeof(time_t);
+    constexpr size_t VERIFICATION_COLLATERAL_INFO_EXPIRATION_DATE_SIZE_BYTE_LEN = sizeof(time_t);
+    constexpr size_t VERIFICATION_COLLATERAL_INFO_TCB_EVALUATION_DATA_NUMBER_SIZE_BYTE_LEN = 4;
+    constexpr size_t VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN = sizeof(time_t);
+    constexpr size_t VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN = 450;
+
+    constexpr size_t VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN =
+            VERIFICATION_COLLATERAL_INFO_ID_SIZE_BYTE_LEN +
+            VERIFICATION_COLLATERAL_INFO_VERSION_SIZE_BYTE_LEN +
+            VERIFICATION_COLLATERAL_INFO_ISSUE_DATE_MIN_SIZE_BYTE_LEN +
+            VERIFICATION_COLLATERAL_INFO_ISSUE_DATE_MAX_SIZE_BYTE_LEN +
+            VERIFICATION_COLLATERAL_INFO_EXPIRATION_DATE_SIZE_BYTE_LEN +
+            VERIFICATION_COLLATERAL_INFO_TCB_EVALUATION_DATA_NUMBER_SIZE_BYTE_LEN +
+            VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN +
+            VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN;
 
 }}}} // namespace intel { namespace sgx { namespace dcap { namespace constants {
 

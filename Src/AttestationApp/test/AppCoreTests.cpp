@@ -60,6 +60,7 @@ struct AppCoreTests: public Test
         "Quote/file/path",
         "QeIdentity/file/path/",
         "QveIdentity/file/path/",
+        "VerCollInfo/file/path",
         0};
 
     std::vector<uint8_t> quoteContent = {1, 2, 255, 0, 0, 43, 58};
@@ -72,6 +73,8 @@ struct AppCoreTests: public Test
     std::string qeIdentityContent = "qeIdentity content";
     std::string qveIdentityContent = "qveIdentity content";
     std::string tcbSigningChainContent = "tcb signing chain content";
+    std::vector<uint8_t> verCollInfoEmpty = std::vector<uint8_t>(VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN);
+    std::vector<uint8_t> verCollInfoFilled = std::vector<uint8_t>(VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN, 1);
 };
 
 TEST_F(AppCoreTests, shouldProvideVersionStringFromLibrary)
@@ -93,6 +96,7 @@ TEST_F(AppCoreTests, shouldVerifyInputDataFromProvidedFiles)
     EXPECT_CALL(*fileReaderMock, readContent(options.qveIdentityFile)).WillOnce(Return(qveIdentityContent));
     EXPECT_CALL(*fileReaderMock, readContent(options.tcbSigningChainFile)).WillOnce(Return(tcbSigningChainContent));
     EXPECT_CALL(*fileReaderMock, readBinaryContent(options.quoteFile)).WillOnce(Return(quoteContent));
+    EXPECT_CALL(*fileReaderMock, saveBinaryContent(options.verCollInfoFile, verCollInfoFilled)).WillOnce(Return());
 
     EXPECT_CALL(*attestationLibraryMock, verifyPCKCertificate(AllOf(HasSubstr(pckCertContent), HasSubstr(pckSigningChainContent)),
         rootCaCrlContent, intermediateCaCrlContent, trustedRootCertContent, _)).WillOnce(Return(STATUS_OK));
@@ -102,8 +106,12 @@ TEST_F(AppCoreTests, shouldVerifyInputDataFromProvidedFiles)
             .WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyQeIdentity(qveIdentityContent, tcbSigningChainContent, rootCaCrlContent, trustedRootCertContent, _))
             .WillOnce(Return(STATUS_OK));
-    EXPECT_CALL(*attestationLibraryMock, verifyQuote(quoteContent, pckCertContent, intermediateCaCrlContent, tcbInfoContent, qeIdentityContent))
-        .WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*attestationLibraryMock, verifyQuote(quoteContent, pckCertContent, intermediateCaCrlContent, tcbInfoContent, qeIdentityContent, verCollInfoEmpty))
+            .WillOnce(Invoke([&](const std::vector<uint8_t>&, const std::string&, const std::string&, const std::string&, const std::string&, std::vector<uint8_t>& verCollInfo) {
+                // Simulate modification of verCollInfoPlaceholder
+                verCollInfo = verCollInfoFilled;
+                return STATUS_OK;
+            }));
 
     EXPECT_TRUE(app.runVerification(options, log));
 }
@@ -137,7 +145,7 @@ TEST_F(AppCoreTests, shouldFailWhenQuoteValidationFailed)
     EXPECT_CALL(*attestationLibraryMock, verifyTCBInfo(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyQeIdentity(_, _, _, _, _)).Times(2).WillRepeatedly(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyPCKCertificate(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
-    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _)).WillOnce(Return(STATUS_MISSING_PARAMETERS));
+    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _, _)).WillOnce(Return(STATUS_MISSING_PARAMETERS));
     EXPECT_FALSE(app.runVerification(options, log));
     EXPECT_THAT(log.str(), HasSubstr("STATUS_MISSING_PARAMETERS"));
 }
@@ -146,7 +154,7 @@ TEST_F(AppCoreTests, shouldFailWhenPCKCertificateValidationFailed)
 {
     EXPECT_CALL(*fileReaderMock, readContent(_)).WillRepeatedly(Return("content"));
     EXPECT_CALL(*fileReaderMock, readBinaryContent(_)).WillRepeatedly(Return(quoteContent));
-    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyTCBInfo(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyQeIdentity(_, _, _, _, _)).Times(2).WillRepeatedly(Return(STATUS_OK));
 
@@ -160,7 +168,7 @@ TEST_F(AppCoreTests, shouldFailWhenTCBInfoValidationFailed)
 {
     EXPECT_CALL(*fileReaderMock, readContent(_)).WillRepeatedly(Return("content"));
     EXPECT_CALL(*fileReaderMock, readBinaryContent(_)).WillRepeatedly(Return(quoteContent));
-    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyPCKCertificate(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyQeIdentity(_, _, _, _, _)).Times(2).WillRepeatedly(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyTCBInfo(_, _, _, _, _)).WillOnce(Return(STATUS_TCB_INFO_INVALID_SIGNATURE));
@@ -173,7 +181,7 @@ TEST_F(AppCoreTests, shouldFailWhenQeIdentityValidationFailed)
 {
     EXPECT_CALL(*fileReaderMock, readContent(_)).WillRepeatedly(Return("content"));
     EXPECT_CALL(*fileReaderMock, readBinaryContent(_)).WillRepeatedly(Return(quoteContent));
-    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyPCKCertificate(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyQeIdentity(_, _, _, _, _))
        .WillOnce(Return(STATUS_SGX_ENCLAVE_IDENTITY_UNSUPPORTED_FORMAT))
@@ -188,7 +196,7 @@ TEST_F(AppCoreTests, shouldFailWhenQveIdentityValidationFailed)
 {
     EXPECT_CALL(*fileReaderMock, readContent(_)).WillRepeatedly(Return("content"));
     EXPECT_CALL(*fileReaderMock, readBinaryContent(_)).WillRepeatedly(Return(quoteContent));
-    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyPCKCertificate(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyQeIdentity(_, _, _, _, _))
             .WillOnce(Return(STATUS_OK))
@@ -208,19 +216,25 @@ TEST_F(AppCoreTests, shouldVerifyWhenQeIdentityAndQveIdentityFileWasNotGiven)
             "intermediateCA/crl/file/path",
             "TrustedRoot/file/path",
             "TCBInfo/file/path",
-            "Tcb/signing/chain/file/path"
+            "Tcb/signing/chain/file/path",
             "Quote/file/path",
             "",
             "",
-            "",
+            "verificationCollateralInfo/file/path",
             0
     };
 
     EXPECT_CALL(*fileReaderMock, readContent(_)).WillRepeatedly(Return("content"));
     EXPECT_CALL(*fileReaderMock, readContent(options.qeIdentityFile)).Times(0);
     EXPECT_CALL(*fileReaderMock, readContent(options.qveIdentityFile)).Times(0);
+    EXPECT_CALL(*fileReaderMock, saveBinaryContent("verificationCollateralInfo/file/path", verCollInfoFilled)).WillOnce(Return());
     EXPECT_CALL(*fileReaderMock, readBinaryContent(_)).WillRepeatedly(Return(quoteContent));
-    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _, verCollInfoEmpty))
+            .WillOnce(Invoke([&](const std::vector<uint8_t>&, const std::string&, const std::string&, const std::string&, const std::string&, std::vector<uint8_t>& verCollInfo) {
+                // Simulate modification of verCollInfoPlaceholder
+                verCollInfo = verCollInfoFilled;
+                return STATUS_OK;
+            }));
     EXPECT_CALL(*attestationLibraryMock, verifyPCKCertificate(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyQeIdentity(_, _, _, _, _)).Times(0);
     EXPECT_CALL(*attestationLibraryMock, verifyTCBInfo(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
@@ -237,18 +251,24 @@ TEST_F(AppCoreTests, shouldVerifyWhenQeIdentityFileWasNotGiven)
             "intermediateCA/crl/file/path",
             "TrustedRoot/file/path",
             "TCBInfo/file/path",
-            "Tcb/signing/chain/file/path"
+            "Tcb/signing/chain/file/path",
             "Quote/file/path",
             "",
-            "",
             "QveIdentity/file/path/",
+            "verificationCollateralInfo/file/path",
             0
     };
 
     EXPECT_CALL(*fileReaderMock, readContent(_)).WillRepeatedly(Return("content"));
     EXPECT_CALL(*fileReaderMock, readContent(options.qeIdentityFile)).Times(0);
     EXPECT_CALL(*fileReaderMock, readBinaryContent(_)).WillRepeatedly(Return(quoteContent));
-    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*fileReaderMock, saveBinaryContent("verificationCollateralInfo/file/path", verCollInfoFilled)).WillOnce(Return());
+    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _, verCollInfoEmpty))
+            .WillOnce(Invoke([&](const std::vector<uint8_t>&, const std::string&, const std::string&, const std::string&, const std::string&, std::vector<uint8_t>& verCollInfo) {
+                // Simulate modification of verCollInfoPlaceholder
+                verCollInfo = verCollInfoFilled;
+                return STATUS_OK;
+            }));
     EXPECT_CALL(*attestationLibraryMock, verifyPCKCertificate(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyQeIdentity(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyTCBInfo(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
@@ -265,20 +285,54 @@ TEST_F(AppCoreTests, shouldVerifyWhenQveIdentityFileWasNotGiven)
             "intermediateCA/crl/file/path",
             "TrustedRoot/file/path",
             "TCBInfo/file/path",
-            "Tcb/signing/chain/file/path"
+            "Tcb/signing/chain/file/path",
             "Quote/file/path",
-            "",
             "QeIdentity/file/path/",
             "",
+            "verificationCollateralInfo/file/path",
             0
     };
 
     EXPECT_CALL(*fileReaderMock, readContent(_)).WillRepeatedly(Return("content"));
     EXPECT_CALL(*fileReaderMock, readContent(options.qveIdentityFile)).Times(0);
     EXPECT_CALL(*fileReaderMock, readBinaryContent(_)).WillRepeatedly(Return(quoteContent));
-    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*fileReaderMock, saveBinaryContent("verificationCollateralInfo/file/path", verCollInfoFilled)).WillOnce(Return());
+    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _, verCollInfoEmpty))
+            .WillOnce(Invoke([&](const std::vector<uint8_t>&, const std::string&, const std::string&, const std::string&, const std::string&, std::vector<uint8_t>& verCollInfo) {
+                // Simulate modification of verCollInfoPlaceholder
+                verCollInfo = verCollInfoFilled;
+                return STATUS_OK;
+            }));
     EXPECT_CALL(*attestationLibraryMock, verifyPCKCertificate(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyQeIdentity(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*attestationLibraryMock, verifyTCBInfo(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
+
+    EXPECT_TRUE(app.runVerification(noQveIdentityOptions, log));
+}
+
+TEST_F(AppCoreTests, shouldVerifyWhenVerCollInfoFileWasNotGiven)
+{
+    AppOptions noQveIdentityOptions{
+            "PCK/certificate/file/path",
+            "PCKSigning/chain/file/path",
+            "rootCA/crl/file/path",
+            "intermediateCA/crl/file/path",
+            "TrustedRoot/file/path",
+            "TCBInfo/file/path",
+            "Tcb/signing/chain/file/path",
+            "Quote/file/path",
+            "QeIdentity/file/path/",
+            "QveIdentity/file/path/",
+            "",
+            0
+    };
+
+    EXPECT_CALL(*fileReaderMock, readContent(_)).WillRepeatedly(Return("content"));
+    EXPECT_CALL(*fileReaderMock, readBinaryContent(_)).WillRepeatedly(Return(quoteContent));
+    EXPECT_CALL(*fileReaderMock, saveBinaryContent(_, _)).Times(0);
+    EXPECT_CALL(*attestationLibraryMock, verifyQuote(_, _, _, _, _, verCollInfoEmpty)).WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*attestationLibraryMock, verifyPCKCertificate(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
+    EXPECT_CALL(*attestationLibraryMock, verifyQeIdentity(_, _, _, _, _)).Times(2).WillRepeatedly(Return(STATUS_OK));
     EXPECT_CALL(*attestationLibraryMock, verifyTCBInfo(_, _, _, _, _)).WillOnce(Return(STATUS_OK));
 
     EXPECT_TRUE(app.runVerification(noQveIdentityOptions, log));

@@ -32,22 +32,7 @@
 #include "TcbInfoJsonGenerator.h"
 #include <iomanip>
 #include <sstream>
-
-std::string bytesToHexString(const std::vector<uint8_t> &vector)
-{
-    std::string result;
-    result.reserve(vector.size() * 2);   // two digits per character
-
-    static constexpr char hex[] = "0123456789ABCDEF";
-
-    for (const uint8_t c : vector)
-    {
-        result.push_back(hex[c / 16]);
-        result.push_back(hex[c % 16]);
-    }
-
-    return result;
-}
+#include "OpensslHelpers/Bytes.h"
 
 static std::string getTcb(std::array<int, 16> tcb)
 {
@@ -108,6 +93,20 @@ static std::string getTcbComponents(std::array<TcbComponent, 16> components)
     return result;
 }
 
+static std::string getAdvisoryIds(std::vector<std::string> advisoryIds)
+{
+    std::string result = "[";
+    for (auto& advisory : advisoryIds)
+    {
+        result += R"(")" + advisory + R"(",)";
+    }
+    if (!advisoryIds.empty())
+    {
+        result.pop_back(); // remove last comma
+    }
+    return result + "]";
+}
+
 static std::string getTcbLevels(std::string id, std::vector<TcbLevelV3> tcbLevels)
 {
     std::string result = "[";
@@ -121,7 +120,9 @@ static std::string getTcbLevels(std::string id, std::vector<TcbLevelV3> tcbLevel
         }
         result += R"(,"pcesvn":)" + std::to_string(tcbLevel.pcesvn);
         result += R"(},"tcbDate":")" + tcbLevel.tcbDate;
-        result += R"(","tcbStatus":")" + tcbLevel.tcbStatus + R"("},)";
+        result += R"(","tcbStatus":")" + tcbLevel.tcbStatus;
+        result += R"(","advisoryIDs":)" + getAdvisoryIds(tcbLevel.advisoryIds);
+        result += R"(},)";
     }
     result = result.substr(0, result.length() - 1) + "]";
     return result;
@@ -143,7 +144,8 @@ std::string tcbInfoJsonV2Body(uint32_t version, std::string issueDate, std::stri
 
 std::string tcbInfoJsonV3Body(std::string id, uint32_t version, std::string issueDate, std::string nextUpdate,
                               std::string fmspc, std::string pceId, uint32_t tcbType, uint32_t tcbEvaluationDataNumber,
-                              std::vector<TcbLevelV3> tcbLevels, bool includeTdxModule, TdxModule tdxModule)
+                              std::vector<TcbLevelV3> tcbLevels, bool includeTdxModule, TdxModule tdxModule,
+                              bool includeTdxModuleIdentities, std::vector<TdxModuleIdentity> tdxModuleIdentities)
 {
     std::string result;
     result = R"({"id":")" + id;
@@ -151,12 +153,43 @@ std::string tcbInfoJsonV3Body(std::string id, uint32_t version, std::string issu
     result += R"(","nextUpdate":")" + nextUpdate + R"(","fmspc":")" + fmspc + R"(","pceId":")" + pceId;
     result += R"(","tcbType":)" + std::to_string(tcbType);
     result += R"(,"tcbEvaluationDataNumber":)" + std::to_string(tcbEvaluationDataNumber);
+
     if (includeTdxModule)
     {
-        result += R"(,"tdxModule":{"mrsigner":")" + bytesToHexString(tdxModule.mrsigner) + R"(","attributes":")"
-                + bytesToHexString(tdxModule.attributes) + R"(","attributesMask":")" + bytesToHexString(tdxModule.attributesMask)
+        result += R"(,"tdxModule":{"mrsigner":")" + intel::sgx::dcap::bytesToHexString(tdxModule.mrsigner) + R"(","attributes":")"
+                + intel::sgx::dcap::bytesToHexString(tdxModule.attributes) + R"(","attributesMask":")" + intel::sgx::dcap::bytesToHexString(tdxModule.attributesMask)
                 + R"("})";
     }
+
+    if (includeTdxModuleIdentities)
+    {
+        result += R"(,"tdxModuleIdentities":[)";
+        for (auto& tdxModuleIdentity : tdxModuleIdentities)
+        {
+            result += R"({"id":")" + tdxModuleIdentity.id + R"(","mrsigner":")" + tdxModuleIdentity.mrsigner;
+            result += R"(","attributes":")" + tdxModuleIdentity.attributes + R"(","attributesMask":")" + tdxModuleIdentity.attributesMask;
+            result += R"(","tcbLevels":[)";
+            for (auto& tdxModuleTcbLevel : tdxModuleIdentity.tcbLevels)
+            {
+                result += R"({"tcb":{"isvsvn":)" + std::to_string(tdxModuleTcbLevel.isvsvn);
+                result += R"(},"tcbDate":")" + tdxModuleTcbLevel.tcbDate;
+                result += R"(","tcbStatus":")" + tdxModuleTcbLevel.tcbStatus;
+                result += R"(","advisoryIDs":)" + getAdvisoryIds(tdxModuleTcbLevel.advisoryIds);
+                result += R"(},)";
+            }
+            if (!tdxModuleIdentity.tcbLevels.empty())
+            {
+                result.pop_back(); // remove last comma
+            }
+            result += R"(]},)";
+        }
+        if (!tdxModuleIdentities.empty())
+        {
+            result.pop_back(); // remove last comma
+        }
+        result += R"(])";
+    }
+
     result += R"(,"tcbLevels":)" + getTcbLevels(id, tcbLevels) + "}";
     return result;
 }

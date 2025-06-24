@@ -66,4 +66,17 @@ std::vector<uint8_t> FileReader::readBinaryContent(const std::string& filePath) 
     file.read(reinterpret_cast<char*>(retVal.data()), fileSize);
     return retVal;
 }
+
+void FileReader::saveBinaryContent(const std::string& filePath, const std::vector<uint8_t> content) const
+{
+    std::ofstream outFile(filePath, std::ios::binary);
+
+    if (!outFile.is_open())
+    {
+        throw ReadFileException(std::string("FileReader: failed to open \"") + filePath + "\" binary file!");
+    }
+
+    outFile.write(reinterpret_cast<const char*>(content.data()), static_cast<long>(content.size()));
+    outFile.close();
+}
 }}}

@@ -30,14 +30,12 @@
  */
 
 #include "QuoteVerifier.h"
-#include "EnclaveIdentityV2.h"
 #include "Checks/TcbLevelCheck.h" // checkTcbLevel
 #include "Checks/TdxModuleCheck.h" // findTdxModuleIdentity
 #include "Utils/RuntimeException.h"
 #include "Utils/Logger.h"
 #include "Utils/StatusPrinter.h"
 
-#include <algorithm>
 #include <functional>
 
 #include <CertVerification/X509Constants.h>
@@ -45,7 +43,6 @@
 #include <OpensslHelpers/DigestUtils.h>
 #include <OpensslHelpers/KeyUtils.h>
 #include <OpensslHelpers/SignatureVerification.h>
-#include <OpensslHelpers/Bytes.h>
 #include <Verifiers/PckCertVerifier.h>
 
 using namespace intel::sgx::dcap::parser::json;
@@ -56,18 +53,19 @@ Status QuoteVerifier::verify(const Quote& quote,
                              const dcap::parser::x509::PckCertificate& pckCert,
                              const pckparser::CrlStore& crl,
                              const dcap::parser::json::TcbInfo& tcbInfo,
-                             const EnclaveIdentityV2 *enclaveIdentity,
-                             const EnclaveReportVerifier& enclaveReportVerifier)
+                             const EnclaveIdentity *enclaveIdentity,
+                             const EnclaveReportVerifier& enclaveReportVerifier,
+                             VerificationCollateralInfo& verificationCollateralInfo)
 {
     Optional<Status> qeIdentityStatus;
 
-    /// 4.1.2.4.4
+    /// 4.1.2.5.5
     if (!_baseVerififer.commonNameContains(pckCert.getSubject(), constants::SGX_PCK_CN_PHRASE)) {
         LOG_ERROR("PCK Certificate. CN in Subject field does not contain \"SGX PCK Certificate\" phrase");
         return STATUS_INVALID_PCK_CERT;
     }
 
-    /// 4.1.2.4.6
+    /// 4.1.2.5.7
     if(!PckCrlVerifier{}.checkIssuer(crl))
     {
         LOG_ERROR("PCK Revocation List. CN in Issuer field does not contain \"CA\" phrase");
@@ -83,14 +81,14 @@ Status QuoteVerifier::verify(const Quote& quote,
         return STATUS_INVALID_PCK_CRL;
     }
 
-    /// 4.1.2.4.7
+    /// 4.1.2.5.8
     if(crl.isRevoked(pckCert))
     {
         LOG_ERROR("PCK Certificate is revoked by PCK Revocation List");
         return STATUS_PCK_REVOKED;
     }
 
-    /// 4.1.2.4.9
+    /// 4.1.2.5.10
     if(tcbInfo.getVersion() >= 3)
     {
         if(tcbInfo.getId() == parser::json::TcbInfo::TDX_ID && quote.getHeader().teeType != dcap::constants::TEE_TYPE_TDX)
@@ -113,7 +111,7 @@ Status QuoteVerifier::verify(const Quote& quote,
         }
     }
 
-    /// 4.1.2.4.10
+    /// 4.1.2.5.11
     if(pckCert.getFmspc() != tcbInfo.getFmspc())
     {
         LOG_ERROR("FMSPC value from TcbInfo ({}) and SGX Extension in PCK Cert ({}) do not match",
@@ -146,7 +144,7 @@ Status QuoteVerifier::verify(const Quote& quote,
 
     if (tcbInfo.getVersion() >= 3 && tcbInfo.getId() == parser::json::TcbInfo::TDX_ID)
     {
-        /// 4.1.2.4.11
+        /// 4.1.2.5.12
         const auto& tdxModule = tcbInfo.getTdxModule();
         const auto& quoteMrSignerSeam = quote.getMrSignerSeam();
         const auto& quoteSeamAttributes = quote.getSeamAttributes();
@@ -178,7 +176,7 @@ Status QuoteVerifier::verify(const Quote& quote,
             tdxModuleAttributesMask = tdxModuleIdentity->getAttributesMask();
         }
 
-        /// 4.1.2.4.11.1
+        /// 4.1.2.5.12.1
         if (quoteMrSignerSeam.size() != tdxModuleMrSigner.size())
         {
             LOG_ERROR("MRSIGNERSEAM value size from TdReport in Quote ({}) and MRSIGNER value size from TcbInfo ({}) are not the same",
@@ -197,7 +195,7 @@ Status QuoteVerifier::verify(const Quote& quote,
             }
         }
 
-        /// 4.1.2.4.11.2
+        /// 4.1.2.5.12.2
         if (quoteSeamAttributes.size() != tdxModuleAttributes.size())
         {
             LOG_ERROR("SEAMATTRIBUTES value size from TdReport in Quote ({}) and TDXMODULEATTRIBUTES value size from TcbInfo ({}) are not the same",
@@ -217,7 +215,7 @@ Status QuoteVerifier::verify(const Quote& quote,
         }
     }
 
-    /// 4.1.2.4.12
+    /// 4.1.2.5.13
     if (!crypto::verifySha256EcdsaSignature(quote.getQeReportSignature(), quote.getQeReport().rawBlob(), *pubKey))
     {
         LOG_ERROR("QE Report Signature extracted from quote ({}) cannot be verified with the Public Key extracted from PCK Certificate ({})",
@@ -226,7 +224,7 @@ Status QuoteVerifier::verify(const Quote& quote,
         return STATUS_INVALID_QE_REPORT_SIGNATURE;
     }
 
-    /// 4.1.2.4.13
+    /// 4.1.2.5.14
     const auto hashedConcatOfAttestKeyAndQeReportData = [&]() -> std::vector<uint8_t>
     {
         std::vector<uint8_t> ret;
@@ -249,7 +247,7 @@ Status QuoteVerifier::verify(const Quote& quote,
 
     if (enclaveIdentity)
     {
-        /// 4.1.2.4.14
+        /// 4.1.2.5.15
         if(quote.getHeader().teeType == dcap::constants::TEE_TYPE_TDX)
         {
             if(enclaveIdentity->getVersion() == 1)
@@ -280,8 +278,8 @@ Status QuoteVerifier::verify(const Quote& quote,
             return STATUS_QE_IDENTITY_MISMATCH;
         }
 
-        /// 4.1.2.4.15
-        qeIdentityStatus = enclaveReportVerifier.verify(enclaveIdentity, quote.getQeReport());
+        /// 4.1.2.5.16
+        qeIdentityStatus = enclaveReportVerifier.verify(enclaveIdentity, quote.getQeReport(), &verificationCollateralInfo);
         LOG_INFO("QE Identity - Status: {}", printStatus(qeIdentityStatus.value()));
         switch(qeIdentityStatus.value()) {
             case STATUS_SGX_ENCLAVE_REPORT_UNSUPPORTED_FORMAT:
@@ -305,10 +303,11 @@ Status QuoteVerifier::verify(const Quote& quote,
     const auto attestKey = crypto::rawToP256PubKey(quote.getAttestKeyData());
     if(!attestKey)
     {
+        verificationCollateralInfo.setError();
         return STATUS_UNSUPPORTED_QUOTE_FORMAT;
     }
 
-    /// 4.1.2.4.16
+    /// 4.1.2.5.17
     if (!crypto::verifySha256EcdsaSignature(quote.getQuoteSignature(),
                                             quote.getSignedData(),
                                             *attestKey))
@@ -316,16 +315,18 @@ Status QuoteVerifier::verify(const Quote& quote,
         LOG_ERROR("Quote Signature ({}) cannot be verified with ECDSA Attestation Key ({})",
                   bytesToHexString(std::vector<uint8_t>(begin(quote.getQuoteSignature()), end(quote.getQuoteSignature()))),
                   bytesToHexString(std::vector<uint8_t>(begin(quote.getAttestKeyData()), end(quote.getAttestKeyData()))));
+        verificationCollateralInfo.setError();
         return STATUS_INVALID_QUOTE_SIGNATURE;
     }
 
     try
     {
-        /// 4.1.2.4.17
-        return checkTcbLevel(tcbInfo, pckCert, quote, qeIdentityStatus, tdxModuleIdentity);
+        /// 4.1.2.5.18
+        return checkTcbLevel(tcbInfo, pckCert, quote, qeIdentityStatus, tdxModuleIdentity, verificationCollateralInfo);
     }
     catch (const RuntimeException &ex)
     {
+        verificationCollateralInfo.setError();
         return ex.getStatus();
     }
 }

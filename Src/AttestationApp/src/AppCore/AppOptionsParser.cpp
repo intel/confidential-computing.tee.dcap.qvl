@@ -45,6 +45,7 @@ namespace {
     static const std::string intermediateCaCrlDefaultPath = "intermediateCaCrl.der";
     static const std::string qeIdentityDefaultPath = "";
     static const std::string qveIdentityDefaultPath = "";
+    static const std::string verCollInfoDefaultPath = "";
     static const std::string expirationDateDefault = std::to_string(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
 }
 
@@ -60,13 +61,15 @@ std::unique_ptr<AppOptions> AppOptionsParser::parse(int argc, char **argv, std::
     auto rootCaCrlFile = arg_str0(NULL, "rootCaCrl", NULL, "Root Ca CRL file path, PEM or DER format [=rootCaCrl.der]");
     auto intermediateCaCrlFile = arg_str0(NULL, "intermediateCaCrl", NULL, "Intermediate Ca CRL file path, PEM or DER format [=intermediateCaCrl.der]");
     auto quoteFile = arg_str0(NULL, "quote", NULL, "Quote file path, binary format [=quote.dat]");
+    auto verCollInfoFile = arg_str0(NULL, "verificationCollateralInfo", NULL, "Verification Collateral Info file path, binary format. VerificationCollateralInfo generation is optional, will not run by default [=]");
     auto expirationDate = arg_str0(NULL, "expirationDate", NULL, "Expiration date in timestamp seconds [=seconds]");
     struct arg_lit* help = arg_lit0("h", "help", "Print this message");
     auto end = arg_end(20);
 
     void *argtable[] = {trustedRootCACertificateFile, pckSigningChainFile, pckCertificateFile,
                         tcbSigningChainFile, tcbInfoFile, qeIdentityFile, qveIdentityFile,
-                        rootCaCrlFile, intermediateCaCrlFile, quoteFile, expirationDate, help, end};
+                        rootCaCrlFile, intermediateCaCrlFile, quoteFile, verCollInfoFile,
+                        expirationDate, help, end};
 
     if (arg_nullcheck(argtable) != 0)
     {
@@ -84,6 +87,7 @@ std::unique_ptr<AppOptions> AppOptionsParser::parse(int argc, char **argv, std::
     rootCaCrlFile->sval[0] = rootCaCrlDefaultPath.c_str();
     intermediateCaCrlFile->sval[0] = intermediateCaCrlDefaultPath.c_str();
     quoteFile->sval[0] = quoteDefaultPath.c_str();
+    verCollInfoFile->sval[0] = verCollInfoDefaultPath.c_str();
     expirationDate->sval[0] = expirationDateDefault.c_str();
 
 
@@ -113,6 +117,7 @@ std::unique_ptr<AppOptions> AppOptionsParser::parse(int argc, char **argv, std::
     options->rootCaCrlFile = std::string(rootCaCrlFile->sval[0]);
     options->intermediateCaCrlFile = std::string(intermediateCaCrlFile->sval[0]);
     options->quoteFile = std::string(quoteFile->sval[0]);
+    options->verCollInfoFile = std::string(verCollInfoFile->sval[0]);
 
     try
     {

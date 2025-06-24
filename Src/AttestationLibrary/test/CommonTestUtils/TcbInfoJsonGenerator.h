@@ -51,6 +51,7 @@ struct TcbLevelV3
     int pcesvn;
     std::string tcbStatus;
     std::string tcbDate;
+    std::vector<std::string> advisoryIds{};
 };
 
 struct TdxModule
@@ -60,7 +61,24 @@ struct TdxModule
     std::vector<uint8_t> attributesMask;
 };
 
-std::string bytesToHexString(const std::vector<uint8_t> &vector);
+struct TdxModuleTcbLevel
+{
+    uint16_t isvsvn;
+    std::string tcbStatus;
+    std::string tcbDate;
+    std::vector<std::string> advisoryIds{};
+};
+
+struct TdxModuleIdentity
+{
+    std::string id;
+    std::string mrsigner;
+    std::string attributes;
+    std::string attributesMask;
+    std::vector<TdxModuleTcbLevel> tcbLevels;
+};
+
+//std::string bytesToHexString(const std::vector<uint8_t> &vector);
 
 std::string tcbInfoJsonGenerator(int version, std::string issueDate, std::string nextUpdate, std::string fmspc,
                                  std::string pceId, std::array<int, 16> tcb, int pcesvn, std::string status,
@@ -74,7 +92,8 @@ std::string tcbInfoJsonV2Body(uint32_t version, std::string issueDate, std::stri
 
 std::string tcbInfoJsonV3Body(std::string id, uint32_t version, std::string issueDate, std::string nextUpdate,
                               std::string fmspc, std::string pceId, uint32_t tcbType, uint32_t tcbEvaluationDataNumber,
-                              std::vector<TcbLevelV3> tcbLevels, bool includeTdxModule, TdxModule tdxModule);
+                              std::vector<TcbLevelV3> tcbLevels, bool includeTdxModule, TdxModule tdxModule,
+                              bool includeTdxModuleIdentities = false, std::vector<TdxModuleIdentity> tdxModuleIdentities = {});
 
 std::array<int, 16> getRandomTcb();
 std::array<TcbComponent, 16> getRandomTcbComponent();

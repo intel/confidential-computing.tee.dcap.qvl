@@ -1,281 +1,172 @@
 /*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+ * Copyright (C) 2024 Intel Corporation
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted provided that the following conditions are met:
  *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Intel Corporation nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+ * OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
  */
 
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
 
-#include <SgxEcdsaAttestation/QuoteVerification.h>
-#include <Verifiers/EnclaveReportVerifier.h>
-#include <Verifiers/EnclaveIdentityParser.h>
 #include <numeric>
-#include <iostream>
-#include <QuoteV3Generator.h>
-#include <QuoteVerification/Quote.h>
-#include <EnclaveIdentityGenerator.h>
-#include "Utils/StatusNotSupportedException.h"
+#include <IdentityGenerator.h>
+#include "SgxEcdsaAttestation/AttestationParsers.h"
+#include "Utils/TimeUtils.h"
 
 using namespace testing;
 using namespace ::intel::sgx::dcap;
 using namespace intel::sgx::dcap::test;
 using namespace std;
+using namespace intel::sgx::dcap::parser::json;
 
-struct EnclaveIdentityParserUT : public Test
+struct EnclaveIdentityUT : public Test
 {
-    EnclaveIdentityParser parser;
 };
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnStatusOkWhenJsonIsOk)
+TEST_F(EnclaveIdentityUT, shouldParseWhenJsonIsOk)
 {
-    string json = enclaveIdentityJsonWithSignature(EnclaveIdentityVectorModel().toV2JSON());
-    auto result = parser.parse(json);
-
-    ASSERT_EQ(STATUS_OK, result->getStatus());
+    string json = enclaveIdentityJsonWithSignature(EnclaveIdentityVectorModel().toJSON());
+    ASSERT_NO_THROW(EnclaveIdentity::parse(json));
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenMiscselectIsWrong)
+TEST_F(EnclaveIdentityUT, shouldThrowInvalidExtensionExceptionWhenMiscselectIsWrong)
 {
     EnclaveIdentityVectorModel model;
     model.miscselect = {{1, 1}};
-    string json = enclaveIdentityJsonWithSignature(model.toV2JSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    string json = enclaveIdentityJsonWithSignature(model.toJSON());
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenOptionalFieldIsInvalid)
+TEST_F(EnclaveIdentityUT, shouldThrowInvalidExtensionExceptionWhenOptionalFieldIsInvalid)
 {
-    EnclaveIdentityVectorModel model;
-    string json = enclaveIdentityJsonWithSignature(model.toV2JSON());
+    string json = enclaveIdentityJsonWithSignature(EnclaveIdentityVectorModel().toJSON());
     removeWordFromString("mrenclave", json);
     removeWordFromString("mrsigner", json);
     removeWordFromString("isvprodid", json);
     removeWordFromString("isvsvn", json);
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenVerionFieldIsInvalid)
+TEST_F(EnclaveIdentityUT, shouldThrowInvalidExtensionExceptionWhenVerionFieldIsInvalid)
 {
-    EnclaveIdentityVectorModel model;
-    string json = enclaveIdentityJsonWithSignature(model.toV2JSON());
+    string json = enclaveIdentityJsonWithSignature(EnclaveIdentityVectorModel().toJSON());
     removeWordFromString("version", json);
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenMiscselectHasIncorrectSize)
+TEST_F(EnclaveIdentityUT, shouldThrowInvalidExtensionExceptionWhenMiscselectHasIncorrectSize)
 {
     EnclaveIdentityVectorModel model;
     model.miscselect= {{1, 1}};
-    string json = enclaveIdentityJsonWithSignature(model.toV2JSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    string json = enclaveIdentityJsonWithSignature(model.toJSON());
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenMiscselectIsNotHexString)
+TEST_F(EnclaveIdentityUT, shouldThrowInvalidExtensionExceptionWhenMiscselectIsNotHexString)
 {
     EnclaveIdentityStringModel model;
     model.miscselect = "xyz00000";
     string json = enclaveIdentityJsonWithSignature(model.toJSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenMiscselectMaskHasIncorrectSize)
+TEST_F(EnclaveIdentityUT, shouldThrowInvalidExtensionExceptionWhenMiscselectMaskHasIncorrectSize)
 {
     EnclaveIdentityVectorModel model;
     model.miscselectMask = {{1, 1}};
-    string json = enclaveIdentityJsonWithSignature(model.toV2JSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    string json = enclaveIdentityJsonWithSignature(model.toJSON());
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenMiscselectMaskIsNotHexString)
+TEST_F(EnclaveIdentityUT, shouldThrowInvalidExtensionExceptionWhenMiscselectMaskIsNotHexString)
 {
     EnclaveIdentityStringModel model;
     model.miscselectMask = "xyz00000";
     string json = enclaveIdentityJsonWithSignature(model.toJSON());
-
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenAttributesHasIncorrectSize)
+TEST_F(EnclaveIdentityUT, shouldThrowInvalidExtensionExceptionWhenAttributesHasIncorrectSize)
 {
     EnclaveIdentityVectorModel model;
     model.attributes = {{1, 1}};
-    string json = enclaveIdentityJsonWithSignature(model.toV2JSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    string json = enclaveIdentityJsonWithSignature(model.toJSON());
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenAttributesIsNotHexString)
+TEST_F(EnclaveIdentityUT, shouldThrowInvalidExtensionExceptionWhenAttributesIsNotHexString)
 {
     EnclaveIdentityStringModel model;
     model.attributes = "xyz45678900000000000000123456789";
     string json = enclaveIdentityJsonWithSignature(model.toJSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenAttributesMaskHasIncorrectSize)
+TEST_F(EnclaveIdentityUT, shouldReturnEnclaveIdentityInvalidWhenAttributesMaskHasIncorrectSize)
 {
     EnclaveIdentityVectorModel model;
     model.attributesMask = {{1, 1}};
-    string json = enclaveIdentityJsonWithSignature(model.toV2JSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    string json = enclaveIdentityJsonWithSignature(model.toJSON());
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenAttributesMaskIsNotHexString)
+TEST_F(EnclaveIdentityUT, shouldReturnEnclaveIdentityInvalidWhenAttributesMaskIsNotHexString)
 {
     EnclaveIdentityStringModel model;
     model.attributesMask = "xyz45678900000000000000123456789";
     string json = enclaveIdentityJsonWithSignature(model.toJSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenIssuedateIsWrong)
+TEST_F(EnclaveIdentityUT, shouldReturnEnclaveIdentityInvalidWhenIssuedateIsWrong)
 {
     EnclaveIdentityStringModel model;
     model.issueDate = "2018-08-22T10:09:";
     string json = enclaveIdentityJsonWithSignature(model.toJSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityInvalidWhenNextUpdateIsWrong)
+TEST_F(EnclaveIdentityUT, shouldReturnEnclaveIdentityInvalidWhenNextUpdateIsWrong)
 {
     EnclaveIdentityStringModel model;
     model.nextUpdate = "2018-08-22T10:09:";
     string json = enclaveIdentityJsonWithSignature(model.toJSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldReturnEnclaveIdentityUnsuportedVersionWhenVersionIsWrong)
+TEST_F(EnclaveIdentityUT, shouldThrowInvalidVersionExceptionWhenVersionIsWrong)
 {
     EnclaveIdentityVectorModel model;
     model.version = 5;
-    string json = enclaveIdentityJsonWithSignature(model.toV2JSON());
-    try {
-        parser.parse(json);
-        FAIL();
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_UNSUPPORTED_VERSION, ex.getStatus());
-    }
+    string json = enclaveIdentityJsonWithSignature(model.toJSON());
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidVersionException);
 }
 
 
-TEST_F(EnclaveIdentityParserUT, positiveQE)
+TEST_F(EnclaveIdentityUT, positiveQE)
 {
     auto json = enclaveIdentityJsonWithSignature();
 
@@ -286,44 +177,34 @@ TEST_F(EnclaveIdentityParserUT, positiveQE)
     std::vector<uint8_t> expectedMrSigner = {0xaa, 0xff, 0x34, 0xff, 0xa5, 0x19, 0x81, 0x95, 0x1a, 0x61, 0xd6, 0x16, 0xb1,
                                              0x6c, 0x16, 0xf1, 0x65, 0x1c, 0x65, 0x16, 0xe5, 0x1f, 0x65, 0x1d, 0x26, 0xa6, 0x16, 0x6e, 0xd5, 0x67, 0x9c, 0x79};
     uint32_t expectedIsvProdId = 3;
-    try
-    {
-        auto enclaveIdentity = parser.parse(json);
-        auto *jsonObject = dynamic_cast<EnclaveIdentityV2 *>(enclaveIdentity.get());
-        EXPECT_EQ(jsonObject->getVersion(), 2);
-        EXPECT_EQ(jsonObject->getMiscselect(), expectedMiscSelect);
-        EXPECT_EQ(jsonObject->getMiscselectMask(), expectedMiscSelectMask);
-        EXPECT_EQ(jsonObject->getAttributes(), expectedAttributes);
-        EXPECT_EQ(jsonObject->getAttributesMask(), expectedAttributesMask);
-        EXPECT_EQ(jsonObject->getMrsigner(), expectedMrSigner);
-        EXPECT_EQ(jsonObject->getIsvProdId(), expectedIsvProdId);
-        EXPECT_EQ(jsonObject->getID(), EnclaveID::QE);
-        EXPECT_EQ(jsonObject->getTcbEvaluationDataNumber(), 0);
-        EXPECT_EQ(jsonObject->getTcbStatus(8), TcbStatus::UpToDate);
-        EXPECT_EQ(jsonObject->getTcbStatus(7), TcbStatus::OutOfDate);
-        EXPECT_EQ(jsonObject->getTcbStatus(6), TcbStatus::ConfigurationNeeded);
-        EXPECT_EQ(jsonObject->getTcbStatus(5), TcbStatus::OutOfDateConfigurationNeeded);
-        EXPECT_EQ(jsonObject->getTcbStatus(4), TcbStatus::Revoked);
-        EXPECT_THROW({
-                        try
-                        {
-                            jsonObject->getTcbStatus(3);
-                        }
-                        catch (const StatusNotSupportedException  &e)
-                        {
-                            EXPECT_STREQ(e.what(), "Non-existent tcb status exception");
-                            throw;
-                        }
-                     },StatusNotSupportedException);
-    }
-
-    catch(const ParserException &ex)
-    {
-        FAIL() << "Unexpected status: " << ex.getStatus();
-    }
+    
+    auto enclaveIdentity = EnclaveIdentity::parse(json);
+    EXPECT_EQ(enclaveIdentity.getVersion(), 2);
+    EXPECT_EQ(enclaveIdentity.getMiscselect(), expectedMiscSelect);
+    EXPECT_EQ(enclaveIdentity.getMiscselectMask(), expectedMiscSelectMask);
+    EXPECT_EQ(enclaveIdentity.getAttributes(), expectedAttributes);
+    EXPECT_EQ(enclaveIdentity.getAttributesMask(), expectedAttributesMask);
+    EXPECT_EQ(enclaveIdentity.getMrsigner(), expectedMrSigner);
+    EXPECT_EQ(enclaveIdentity.getIsvProdId(), expectedIsvProdId);
+    EXPECT_EQ(enclaveIdentity.getID(), EnclaveID::QE);
+    EXPECT_EQ(enclaveIdentity.getTcbEvaluationDataNumber(), 0);
+    EXPECT_EQ(enclaveIdentity.getTcbLevel(6).getTcbStatus(), TcbStatus::UpToDate);
+    EXPECT_EQ(enclaveIdentity.getTcbLevel(5).getTcbStatus(), TcbStatus::OutOfDate);
+    EXPECT_EQ(enclaveIdentity.getTcbLevel(4).getTcbStatus(), TcbStatus::Revoked);
+    EXPECT_THROW({
+                    try
+                    {
+                        enclaveIdentity.getTcbLevel(3);
+                    }
+                    catch (const StatusNotSupportedException  &e)
+                    {
+                        EXPECT_STREQ(e.what(), "Non-existent tcb status exception");
+                        throw;
+                    }
+                 },StatusNotSupportedException);
 }
 
-TEST_F(EnclaveIdentityParserUT, positiveQVE)
+TEST_F(EnclaveIdentityUT, positiveQVE)
 {
     auto json = enclaveIdentityJsonWithSignature(R"json({
             "id": "QVE",
@@ -339,24 +220,14 @@ TEST_F(EnclaveIdentityParserUT, positiveQVE)
             "isvprodid": 3,
             "tcbLevels": [
                 {
-                    "tcb":{ "isvsvn":8 },
+                    "tcb":{ "isvsvn":6 },
                     "tcbDate":"2019-06-23T10:41:29Z",
                     "tcbStatus":"UpToDate"
                 },
                 {
-                    "tcb":{ "isvsvn":7 },
-                    "tcbDate":"2019-06-23T10:41:29Z",
-                    "tcbStatus":"OutOfDate"
-                },
-                {
-                    "tcb":{ "isvsvn":6 },
-                    "tcbDate":"2019-06-23T10:41:29Z",
-                    "tcbStatus":"ConfigurationNeeded"
-                },
-                {
                     "tcb":{ "isvsvn":5 },
                     "tcbDate":"2019-06-23T10:41:29Z",
-                    "tcbStatus":"OutOfDateConfigurationNeeded"
+                    "tcbStatus":"OutOfDate"
                 },
                 {
                     "tcb":{ "isvsvn":4 },
@@ -373,43 +244,34 @@ TEST_F(EnclaveIdentityParserUT, positiveQVE)
     std::vector<uint8_t> expectedMrSigner = {0xaa, 0xff, 0x34, 0xff, 0xa5, 0x19, 0x81, 0x95, 0x1a, 0x61, 0xd6, 0x16, 0xb1,
                                              0x6c, 0x16, 0xf1, 0x65, 0x1c, 0x65, 0x16, 0xe5, 0x1f, 0x65, 0x1d, 0x26, 0xa6, 0x16, 0x6e, 0xd5, 0x67, 0x9c, 0x79};
     uint32_t expectedIsvProdId = 3;
-    try
-    {
-        auto enclaveIdentity = parser.parse(json);
-        auto *jsonObject = dynamic_cast<EnclaveIdentityV2 *>(enclaveIdentity.get());
-        EXPECT_EQ(jsonObject->getVersion(), 2);
-        EXPECT_EQ(jsonObject->getMiscselect(), expectedMiscSelect);
-        EXPECT_EQ(jsonObject->getMiscselectMask(), expectedMiscSelectMask);
-        EXPECT_EQ(jsonObject->getAttributes(), expectedAttributes);
-        EXPECT_EQ(jsonObject->getAttributesMask(), expectedAttributesMask);
-        EXPECT_EQ(jsonObject->getMrsigner(), expectedMrSigner);
-        EXPECT_EQ(jsonObject->getIsvProdId(), expectedIsvProdId);
-        EXPECT_EQ(jsonObject->getID(), EnclaveID::QVE);
-        EXPECT_EQ(jsonObject->getTcbEvaluationDataNumber(), 0);
-        EXPECT_EQ(jsonObject->getTcbStatus(8), TcbStatus::UpToDate);
-        EXPECT_EQ(jsonObject->getTcbStatus(7), TcbStatus::OutOfDate);
-        EXPECT_EQ(jsonObject->getTcbStatus(6), TcbStatus::ConfigurationNeeded);
-        EXPECT_EQ(jsonObject->getTcbStatus(5), TcbStatus::OutOfDateConfigurationNeeded);
-        EXPECT_EQ(jsonObject->getTcbStatus(4), TcbStatus::Revoked);
-        EXPECT_THROW({
-                         try
-                         {
-                             jsonObject->getTcbStatus(3);
-                         }
-                         catch (const StatusNotSupportedException  &e)
-                         {
-                             EXPECT_STREQ(e.what(), "Non-existent tcb status exception");
-                             throw;
-                         }
-                     },StatusNotSupportedException);
-}
-    catch(const ParserException &ex)
-    {
-        FAIL() << "Unexpected status: " << ex.getStatus();
-    }
+    
+    auto enclaveIdentity = EnclaveIdentity::parse(json);
+    EXPECT_EQ(enclaveIdentity.getVersion(), 2);
+    EXPECT_EQ(enclaveIdentity.getMiscselect(), expectedMiscSelect);
+    EXPECT_EQ(enclaveIdentity.getMiscselectMask(), expectedMiscSelectMask);
+    EXPECT_EQ(enclaveIdentity.getAttributes(), expectedAttributes);
+    EXPECT_EQ(enclaveIdentity.getAttributesMask(), expectedAttributesMask);
+    EXPECT_EQ(enclaveIdentity.getMrsigner(), expectedMrSigner);
+    EXPECT_EQ(enclaveIdentity.getIsvProdId(), expectedIsvProdId);
+    EXPECT_EQ(enclaveIdentity.getID(), EnclaveID::QVE);
+    EXPECT_EQ(enclaveIdentity.getTcbEvaluationDataNumber(), 0);
+    EXPECT_EQ(enclaveIdentity.getTcbLevel(6).getTcbStatus(), TcbStatus::UpToDate);
+    EXPECT_EQ(enclaveIdentity.getTcbLevel(5).getTcbStatus(), TcbStatus::OutOfDate);
+    EXPECT_EQ(enclaveIdentity.getTcbLevel(4).getTcbStatus(), TcbStatus::Revoked);
+    EXPECT_THROW({
+                     try
+                     {
+                         enclaveIdentity.getTcbLevel(3);
+                     }
+                     catch (const StatusNotSupportedException  &e)
+                     {
+                         EXPECT_STREQ(e.what(), "Non-existent tcb status exception");
+                         throw;
+                     }
+                 },StatusNotSupportedException);
 }
 
-TEST_F(EnclaveIdentityParserUT, positiveTD_QE)
+TEST_F(EnclaveIdentityUT, positiveTD_QE)
 {
     auto json = enclaveIdentityJsonWithSignature(R"json({
             "id": "TD_QE",
@@ -425,24 +287,14 @@ TEST_F(EnclaveIdentityParserUT, positiveTD_QE)
             "isvprodid": 3,
             "tcbLevels": [
                 {
-                    "tcb":{ "isvsvn":8 },
+                    "tcb":{ "isvsvn":6 },
                     "tcbDate":"2019-06-23T10:41:29Z",
                     "tcbStatus":"UpToDate"
                 },
                 {
-                    "tcb":{ "isvsvn":7 },
-                    "tcbDate":"2019-06-23T10:41:29Z",
-                    "tcbStatus":"OutOfDate"
-                },
-                {
-                    "tcb":{ "isvsvn":6 },
-                    "tcbDate":"2019-06-23T10:41:29Z",
-                    "tcbStatus":"ConfigurationNeeded"
-                },
-                {
                     "tcb":{ "isvsvn":5 },
                     "tcbDate":"2019-06-23T10:41:29Z",
-                    "tcbStatus":"OutOfDateConfigurationNeeded"
+                    "tcbStatus":"OutOfDate"
                 },
                 {
                     "tcb":{ "isvsvn":4 },
@@ -459,43 +311,34 @@ TEST_F(EnclaveIdentityParserUT, positiveTD_QE)
     std::vector<uint8_t> expectedMrSigner = {0xaa, 0xff, 0x34, 0xff, 0xa5, 0x19, 0x81, 0x95, 0x1a, 0x61, 0xd6, 0x16, 0xb1,
                                              0x6c, 0x16, 0xf1, 0x65, 0x1c, 0x65, 0x16, 0xe5, 0x1f, 0x65, 0x1d, 0x26, 0xa6, 0x16, 0x6e, 0xd5, 0x67, 0x9c, 0x79};
     uint32_t expectedIsvProdId = 3;
-    try
-    {
-        auto enclaveIdentity = parser.parse(json);
-        auto *jsonObject = dynamic_cast<EnclaveIdentityV2 *>(enclaveIdentity.get());
-        EXPECT_EQ(jsonObject->getVersion(), 2);
-        EXPECT_EQ(jsonObject->getMiscselect(), expectedMiscSelect);
-        EXPECT_EQ(jsonObject->getMiscselectMask(), expectedMiscSelectMask);
-        EXPECT_EQ(jsonObject->getAttributes(), expectedAttributes);
-        EXPECT_EQ(jsonObject->getAttributesMask(), expectedAttributesMask);
-        EXPECT_EQ(jsonObject->getMrsigner(), expectedMrSigner);
-        EXPECT_EQ(jsonObject->getIsvProdId(), expectedIsvProdId);
-        EXPECT_EQ(jsonObject->getID(), EnclaveID::TD_QE);
-        EXPECT_EQ(jsonObject->getTcbEvaluationDataNumber(), 0);
-        EXPECT_EQ(jsonObject->getTcbStatus(8), TcbStatus::UpToDate);
-        EXPECT_EQ(jsonObject->getTcbStatus(7), TcbStatus::OutOfDate);
-        EXPECT_EQ(jsonObject->getTcbStatus(6), TcbStatus::ConfigurationNeeded);
-        EXPECT_EQ(jsonObject->getTcbStatus(5), TcbStatus::OutOfDateConfigurationNeeded);
-        EXPECT_EQ(jsonObject->getTcbStatus(4), TcbStatus::Revoked);
-        EXPECT_THROW({
-                         try
-                         {
-                             jsonObject->getTcbStatus(3);
-                         }
-                         catch (const StatusNotSupportedException  &e)
-                         {
-                             EXPECT_STREQ(e.what(), "Non-existent tcb status exception");
-                             throw;
-                         }
-                     },StatusNotSupportedException);
-    }
-    catch(const ParserException &ex)
-    {
-        FAIL() << "Unexpected status: " << ex.getStatus();
-    }
+   
+    auto enclaveIdentity = EnclaveIdentity::parse(json);
+    EXPECT_EQ(enclaveIdentity.getVersion(), 2);
+    EXPECT_EQ(enclaveIdentity.getMiscselect(), expectedMiscSelect);
+    EXPECT_EQ(enclaveIdentity.getMiscselectMask(), expectedMiscSelectMask);
+    EXPECT_EQ(enclaveIdentity.getAttributes(), expectedAttributes);
+    EXPECT_EQ(enclaveIdentity.getAttributesMask(), expectedAttributesMask);
+    EXPECT_EQ(enclaveIdentity.getMrsigner(), expectedMrSigner);
+    EXPECT_EQ(enclaveIdentity.getIsvProdId(), expectedIsvProdId);
+    EXPECT_EQ(enclaveIdentity.getID(), EnclaveID::TD_QE);
+    EXPECT_EQ(enclaveIdentity.getTcbEvaluationDataNumber(), 0);
+    EXPECT_EQ(enclaveIdentity.getTcbLevel(6).getTcbStatus(), TcbStatus::UpToDate);
+    EXPECT_EQ(enclaveIdentity.getTcbLevel(5).getTcbStatus(), TcbStatus::OutOfDate);
+    EXPECT_EQ(enclaveIdentity.getTcbLevel(4).getTcbStatus(), TcbStatus::Revoked);
+    EXPECT_THROW({
+                     try
+                     {
+                         enclaveIdentity.getTcbLevel(3);
+                     }
+                     catch (const StatusNotSupportedException  &e)
+                     {
+                         EXPECT_STREQ(e.what(), "Non-existent tcb status exception");
+                         throw;
+                     }
+                 },StatusNotSupportedException);
 }
 
-TEST_F(EnclaveIdentityParserUT, positiveWithExtraField)
+TEST_F(EnclaveIdentityUT, positiveWithExtraField)
 {
     auto json = R"json({
             "id": "QE",
@@ -519,48 +362,25 @@ TEST_F(EnclaveIdentityParserUT, positiveWithExtraField)
             "extraField": "ExtraValue"
         })json";
 
-    EXPECT_EQ(STATUS_OK, parser.parse(enclaveIdentityJsonWithSignature(json))->getStatus());
+    ASSERT_NO_THROW(EnclaveIdentity::parse(enclaveIdentityJsonWithSignature(json)));
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenInitializedWithEmptyString)
+TEST_F(EnclaveIdentityUT, shouldFailWhenInitializedWithEmptyString)
 {
-    try {
-        parser.parse("");
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_UNSUPPORTED_FORMAT, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(""), parser::FormatException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWHenInitializedWithInvalidJSON)
+TEST_F(EnclaveIdentityUT, shouldFailWHenInitializedWithInvalidJSON)
 {
-    try {
-        parser.parse("Plain string.");
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_UNSUPPORTED_FORMAT, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse("Plain string."), parser::FormatException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenQEIdentityFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenQEIdentityFieldIsMissing)
 {
-    const std::string json = R"json({"signature": "adad"})json";
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(R"json({"signature": "adad"})json"), parser::FormatException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenSignatureFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenSignatureFieldIsMissing)
 {
     auto json = R"json({"enclaveIdentity": {
             "id": "QE",
@@ -583,32 +403,17 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenSignatureFieldIsMissing)
             ]
         }})json";
 
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_UNSUPPORTED_FORMAT, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::FormatException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenQeIdentityIsArray)
+TEST_F(EnclaveIdentityUT, shouldFailWhenQeIdentityIsArray)
 {
     auto qeidTemplate = R"json([])json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::FormatException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenIdFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenIdFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "version": 2,
@@ -631,17 +436,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenIdFieldIsMissing)
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
 
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenVersionFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenVersionFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -664,18 +462,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenVersionFieldIsMissing)
         })json";
 
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenIssueDateFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenIssueDateFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -698,18 +488,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenIssueDateFieldIsMissing)
         })json";
 
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenNextUpdateFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenNextUpdateFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -731,18 +513,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenNextUpdateFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbEvaluationDataNumberFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenTcbEvaluationDataNumberFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -764,18 +538,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbEvaluationDataNumberFieldIsMiss
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMiscselectFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -797,18 +563,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectMaskFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMiscselectMaskFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -830,18 +588,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectMaskFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenAttributesFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -863,18 +613,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesMaskFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenAttributesMaskFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -896,18 +638,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesMaskFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMrsignerFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMrsignerFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -929,18 +663,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMrsignerFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenIsvprodidFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenIsvprodidFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -962,18 +688,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenIsvprodidFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenTcbLevelsFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -989,18 +707,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsFieldIsMissing)
             "isvprodid": 3
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenTcbLevelsTcbFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1022,18 +732,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::FormatException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbIsvSvnFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenTcbLevelsTcbIsvSvnFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1056,18 +758,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbIsvSvnFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::FormatException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbDateFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenTcbLevelsTcbDateFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1089,18 +783,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbDateFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::FormatException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbStatusFieldIsMissing)
+TEST_F(EnclaveIdentityUT, shouldFailWhenTcbLevelsTcbStatusFieldIsMissing)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1122,18 +808,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbStatusFieldIsMissing)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::FormatException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenVersionFieldIsNotEqual1or2)
+TEST_F(EnclaveIdentityUT, shouldFailWhenVersionFieldIsNotEqual2)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1156,18 +834,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenVersionFieldIsNotEqual1or2)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_UNSUPPORTED_VERSION, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidVersionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenVersionFieldIsNotANumber)
+TEST_F(EnclaveIdentityUT, shouldFailWhenVersionFieldIsNotANumber)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1190,18 +860,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenVersionFieldIsNotANumber)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenIdFieldHasInvalidType)
+TEST_F(EnclaveIdentityUT, shouldFailWhenIdFieldHasInvalidType)
 {
     auto qeidTemplate = R"json({
             "id": 0,
@@ -1224,18 +886,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenIdFieldHasInvalidType)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenIdFieldHasInvalidValue)
+TEST_F(EnclaveIdentityUT, shouldFailWhenIdFieldHasInvalidValue)
 {
     auto qeidTemplate = R"json({
             "id": "QC",
@@ -1258,18 +912,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenIdFieldHasInvalidValue)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenIssueDateIsMalformed)
+TEST_F(EnclaveIdentityUT, shouldFailWhenIssueDateIsMalformed)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1292,18 +938,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenIssueDateIsMalformed)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenIssueDateIsNotAString)
+TEST_F(EnclaveIdentityUT, shouldFailWhenIssueDateIsNotAString)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1326,18 +964,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenIssueDateIsNotAString)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenNextUpdateIsMalformed)
+TEST_F(EnclaveIdentityUT, shouldFailWhenNextUpdateIsMalformed)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1360,18 +990,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenNextUpdateIsMalformed)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenNextUpdateIsNotAString)
+TEST_F(EnclaveIdentityUT, shouldFailWhenNextUpdateIsNotAString)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1394,18 +1016,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenNextUpdateIsNotAString)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectIsMalformed)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMiscselectIsMalformed)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1428,18 +1042,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectIsMalformed)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectIsNotAString)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMiscselectIsNotAString)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1462,18 +1068,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectIsNotAString)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectIsTooShort)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMiscselectIsTooShort)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1496,18 +1094,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectIsTooShort)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectIsTooLong)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMiscselectIsTooLong)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1530,18 +1120,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectIsTooLong)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectMaskIsMalformed)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMiscselectMaskIsMalformed)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1564,18 +1146,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectMaskIsMalformed)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectMaskIsNotAString)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMiscselectMaskIsNotAString)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1598,18 +1172,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectMaskIsNotAString)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectMaskIsTooShort)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMiscselectMaskIsTooShort)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1632,18 +1198,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectMaskIsTooShort)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectMaskIsTooLong)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMiscselectMaskIsTooLong)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1666,18 +1224,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMiscselectMaskIsTooLong)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesAreMalformed)
+TEST_F(EnclaveIdentityUT, shouldFailWhenAttributesAreMalformed)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1700,18 +1250,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesAreMalformed)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesAreNotAString)
+TEST_F(EnclaveIdentityUT, shouldFailWhenAttributesAreNotAString)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1734,18 +1276,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesAreNotAString)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesAreTooShort)
+TEST_F(EnclaveIdentityUT, shouldFailWhenAttributesAreTooShort)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1768,18 +1302,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesAreTooShort)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesAreTooLong)
+TEST_F(EnclaveIdentityUT, shouldFailWhenAttributesAreTooLong)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1802,18 +1328,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesAreTooLong)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesMaskIsMalformed)
+TEST_F(EnclaveIdentityUT, shouldFailWhenAttributesMaskIsMalformed)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1836,18 +1354,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesMaskIsMalformed)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesMaskIsNotAString)
+TEST_F(EnclaveIdentityUT, shouldFailWhenAttributesMaskIsNotAString)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1870,18 +1380,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesMaskIsNotAString)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesMaskIsTooShort)
+TEST_F(EnclaveIdentityUT, shouldFailWhenAttributesMaskIsTooShort)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1904,18 +1406,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesMaskIsTooShort)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesMaskIsTooLong)
+TEST_F(EnclaveIdentityUT, shouldFailWhenAttributesMaskIsTooLong)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1938,18 +1432,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenAttributesMaskIsTooLong)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMrsignerIsMalformed)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMrsignerIsMalformed)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -1972,18 +1458,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMrsignerIsMalformed)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMrsignerIsNotAString)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMrsignerIsNotAString)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -2006,18 +1484,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMrsignerIsNotAString)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMrsignerIsTooShort)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMrsignerIsTooShort)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -2040,18 +1510,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMrsignerIsTooShort)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenMrSignerIsTooLong)
+TEST_F(EnclaveIdentityUT, shouldFailWhenMrSignerIsTooLong)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -2074,18 +1536,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenMrSignerIsTooLong)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenIsvprodidIsNotANumber)
+TEST_F(EnclaveIdentityUT, shouldFailWhenIsvprodidIsNotANumber)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -2108,18 +1562,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenIsvprodidIsNotANumber)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenIsvsvnIsNotANumber)
+TEST_F(EnclaveIdentityUT, shouldFailWhenIsvsvnIsNotANumber)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -2142,18 +1588,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenIsvsvnIsNotANumber)
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsMaskFieldIsAnEmptyArray)
+TEST_F(EnclaveIdentityUT, shouldFailWhenTcbLevelsMaskFieldIsAnEmptyArray)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -2170,18 +1608,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsMaskFieldIsAnEmptyArray)
             "tcbLevels": []
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbStatusFieldInvalidValue)
+TEST_F(EnclaveIdentityUT, shouldFailWhenTcbLevelsTcbStatusFieldInvalidValue)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -2204,18 +1634,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbStatusFieldInvalidValu
             ]
         })json";
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbDateFieldInvalidValue)
+TEST_F(EnclaveIdentityUT, shouldFailWhenTcbLevelsTcbDateFieldInvalidValue)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -2238,18 +1660,10 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelsTcbDateFieldInvalidValue)
             ]
         })json"; // changed ":29Z" to ":290Z"
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
 }
 
-TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelIsInvalidType)
+TEST_F(EnclaveIdentityUT, shouldFailWhenTcbLevelIsInvalidType)
 {
     auto qeidTemplate = R"json({
             "id": "QE",
@@ -2273,13 +1687,5 @@ TEST_F(EnclaveIdentityParserUT, shouldFailWhenTcbLevelIsInvalidType)
             ]
         })json"; // changed ":29Z" to ":290Z"
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
-
-    try {
-        parser.parse(json);
-        FAIL() << "Test should throw exception";
-    }
-    catch (const ParserException &ex)
-    {
-        EXPECT_EQ(STATUS_SGX_ENCLAVE_IDENTITY_INVALID, ex.getStatus());
-    }
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::FormatException);
 }

@@ -34,7 +34,7 @@
 
 #include <vector>
 #include "QuoteConstants.h"
-#include "ByteOperands.h"
+#include "Utils/ByteOperands.h"
 
 namespace intel { namespace sgx { namespace dcap { namespace quote {
 

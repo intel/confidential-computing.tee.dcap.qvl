@@ -48,6 +48,7 @@ struct AppOptions
     std::string quoteFile;
     std::string qeIdentityFile;
     std::string qveIdentityFile;
+    std::string verCollInfoFile;
     time_t expirationDate;
 };
 

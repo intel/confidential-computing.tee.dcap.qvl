@@ -30,14 +30,15 @@
  */
 
 #include "QuoteV3Generator.h"
-#include "EnclaveIdentityGenerator.h"
+#include "IdentityGenerator.h"
 
 #include <SgxEcdsaAttestation/QuoteVerification.h>
 #include <QuoteVerification/Quote.h>
 #include <Verifiers/EnclaveReportVerifier.h>
-#include <Verifiers/EnclaveIdentityParser.h>
 #include "EcdsaSignatureGenerator.h"
 #include "X509CertGenerator.h"
+#include "Mocks/VerificationCollateralInfoMock.h"
+#include "Utils/TimeUtils.h"
 
 #include <gtest/gtest.h>
 
@@ -48,18 +49,36 @@ using namespace ::intel::sgx::dcap;
 using namespace ::intel::sgx::dcap::test;
 using namespace ::intel::sgx::dcap::parser::test;
 using namespace std;
+using namespace intel::sgx::dcap::parser::json;
 
 struct EnclaveReportVerifierUT : public Test
 {
     EnclaveReportVerifier enclaveReportVerifier;
-    test::QuoteV3Generator quoteGenerator;
-    test::QuoteV3Generator::EnclaveReport enclaveReport;
-    EnclaveIdentityParser parser;
+    QuoteV3Generator quoteGenerator;
+    QuoteV3Generator::EnclaveReport enclaveReport;
 
     X509CertGenerator certGenerator = X509CertGenerator{};
     crypto::EVP_PKEY_uptr tcbSigningKey;
+    EnclaveIdentityVectorModel model;
+    VerificationCollateralInfoMock verificationCollateralInfo;
+    std::string tcbDate = "2025-06-10T10:11:12Z";
+    std::string outOfDateLevelAdvisory = "INTEL-SA-00002";
+    std::string revokedLevelAdvisory = "INTEL-SA-00001";
     EnclaveReportVerifierUT(): tcbSigningKey(certGenerator.generateEcKeypair())
     {
+    }
+
+    void SetUp() override
+    {
+        model = EnclaveIdentityVectorModel(tcbDate);
+        const std::vector<IdentityTcbLevelModel> tcbLevels = {
+                {6, tcbDate, "UpToDate"},
+                {5, tcbDate, "OutOfDate", {outOfDateLevelAdvisory}},
+                {4, tcbDate, "Revoked", {revokedLevelAdvisory}}
+        };
+        model.tcbLevels = tcbLevels;
+
+        verificationCollateralInfo = VerificationCollateralInfoMock();
     }
 
     EnclaveReport getEnclaveReport()
@@ -83,6 +102,28 @@ struct EnclaveReportVerifierUT : public Test
         return eReport;
     }
 
+    void checkVerCollInfoEmpty()
+    {
+        ASSERT_EQ(1, verificationCollateralInfo.getId());
+        ASSERT_EQ(1, verificationCollateralInfo.getVersion());
+        ASSERT_EQ(std::vector<time_t>(), verificationCollateralInfo.getIssueDates());
+        ASSERT_EQ(std::vector<time_t>(), verificationCollateralInfo.getNextUpdates());
+        ASSERT_EQ(std::vector<unsigned int>(), verificationCollateralInfo.getTcbEvalNumbers());
+        ASSERT_EQ(std::vector<time_t>(), verificationCollateralInfo.getTcbDates());
+        ASSERT_EQ(std::set<std::string>(), verificationCollateralInfo.getAdvisoryIds());
+    }
+
+    void checkVerCollInfoFilled(const std::set<std::string>& advisoryIds)
+    {
+        ASSERT_EQ(1, verificationCollateralInfo.getId());
+        ASSERT_EQ(1, verificationCollateralInfo.getVersion());
+        ASSERT_EQ((std::vector<time_t>){getEpochTimeFromString(model.issueDate)}, verificationCollateralInfo.getIssueDates());
+        ASSERT_EQ((std::vector<time_t>){getEpochTimeFromString(model.nextUpdate)}, verificationCollateralInfo.getNextUpdates());
+        ASSERT_EQ((std::vector<unsigned int>){model.tcbEvaluationDataNumber}, verificationCollateralInfo.getTcbEvalNumbers());
+        ASSERT_EQ((std::vector<time_t>){getEpochTimeFromString(tcbDate)}, verificationCollateralInfo.getTcbDates());
+        ASSERT_EQ(advisoryIds, verificationCollateralInfo.getAdvisoryIds());
+    }
+
     std::string generateEnclaveIdentity(std::string bodyJson);
 };
 
@@ -97,227 +138,176 @@ std::string EnclaveReportVerifierUT::generateEnclaveIdentity(std::string bodyJso
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportMiscselectMismatchWhenMiscselectIsDifferent)
 {
-    EnclaveIdentityVectorModel model;
     model.miscselect = {{1, 1, 1, 1}};
-    model.applyTo(enclaveReport);
-    string json = model.toV2JSON();
+    enclaveReport.applyEnclaveIdentity(model);
+    string json = model.toJSON();
 
-    auto enclaveIdentity = parser.parse(generateEnclaveIdentity(json));
+    auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(enclaveIdentity.get(), getEnclaveReport());
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_MISCSELECT_MISMATCH, result);
+    checkVerCollInfoEmpty();
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportAttributestMismatchWhenAttributesIsDifferent)
 {
-    EnclaveIdentityVectorModel model;
-    model.applyTo(enclaveReport);
+    enclaveReport.applyEnclaveIdentity(model);
     model.attributes = {{9, 9, 9, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    string json = model.toV2JSON();
+    string json = model.toJSON();
 
-    auto enclaveIdentity = parser.parse(generateEnclaveIdentity(json));
+    auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(enclaveIdentity.get(), getEnclaveReport());
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ATTRIBUTES_MISMATCH, result);
+    checkVerCollInfoEmpty();
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportAttributestMismatchWhenIdentityAttributesHasIncorrectSize)
 {
-    EnclaveIdentityVectorModel model;
     model.attributesMask = {{9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9}};
-    model.applyTo(enclaveReport);
-    string json = model.toV2JSON();
+    enclaveReport.applyEnclaveIdentity(model);
+    string json = model.toJSON();
 
-    ASSERT_THROW({
-                     try
-                     {
-                         parser.parse(generateEnclaveIdentity(json));
-                     }
-                     catch (const ParserException &ex)
-                     {
-                         EXPECT_EQ(ex.getStatus(), STATUS_SGX_ENCLAVE_IDENTITY_INVALID);
-                         throw;
-                     }
-                 }, ParserException);
+    ASSERT_THROW(EnclaveIdentity::parse(generateEnclaveIdentity(json)), parser::InvalidExtensionException);
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnStausStausSgxEnclaveIndentityWhenMrsignerIsNotPresent)
 {
-    EnclaveIdentityVectorModel model;
-    model.applyTo(enclaveReport);
-    string json = model.toV2JSON();
+    enclaveReport.applyEnclaveIdentity(model);
+    string json = model.toJSON();
 
     removeWordFromString("mrsigner", json);
 
-    ASSERT_THROW({
-                     try
-                     {
-                         parser.parse(generateEnclaveIdentity(json));
-                     }
-                     catch (const ParserException &ex)
-                     {
-                         EXPECT_EQ(ex.getStatus(), STATUS_SGX_ENCLAVE_IDENTITY_INVALID);
-                         throw;
-                     }
-                 }, ParserException);
+    ASSERT_THROW(EnclaveIdentity::parse(generateEnclaveIdentity(json)), parser::InvalidExtensionException);
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnStausStausSgxEnclaveIndentityWhenIsvprodidIsNotPresent)
 {
-    EnclaveIdentityVectorModel model;
-    model.applyTo(enclaveReport);
-    string json = model.toV2JSON();
+    enclaveReport.applyEnclaveIdentity(model);
+    string json = model.toJSON();
 
     removeWordFromString("isvprodid", json);
 
-    ASSERT_THROW({
-                     try
-                     {
-                         parser.parse(generateEnclaveIdentity(json));
-                     }
-                     catch (const ParserException &ex)
-                     {
-                         EXPECT_EQ(ex.getStatus(), STATUS_SGX_ENCLAVE_IDENTITY_INVALID);
-                         throw;
-                     }
-                 }, ParserException);
+    ASSERT_THROW(EnclaveIdentity::parse(generateEnclaveIdentity(json)), parser::InvalidExtensionException);
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnStausStausSgxEnclaveIndentityWhenIsvsvnIsNotPresent)
 {
-    EnclaveIdentityVectorModel model;
-    model.applyTo(enclaveReport);
-    string json = model.toV2JSON();
+    enclaveReport.applyEnclaveIdentity(model);
+    string json = model.toJSON();
 
     removeWordFromString("isvsvn", json);
 
-    ASSERT_THROW({
-                     try
-                     {
-                         parser.parse(generateEnclaveIdentity(json));
-                     }
-                     catch (const ParserException &ex)
-                     {
-                         EXPECT_EQ(ex.getStatus(), STATUS_SGX_ENCLAVE_IDENTITY_INVALID);
-                         throw;
-                     }
-                 }, ParserException);
+    ASSERT_THROW(EnclaveIdentity::parse(generateEnclaveIdentity(json)), parser::FormatException);
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportMrsignerMismatchWhenMrsignerIsDifferent)
 {
-    EnclaveIdentityVectorModel model{};
-    model.applyTo(enclaveReport);
+    enclaveReport.applyEnclaveIdentity(model);
     model.mrsigner = {{8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    string json = model.toV2JSON();
+    string json = model.toJSON();
 
-    auto enclaveIdentity = parser.parse(generateEnclaveIdentity(json));
+    auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(enclaveIdentity.get(), getEnclaveReport());
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_MRSIGNER_MISMATCH, result);
+    checkVerCollInfoEmpty();
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportIsvprodidMismatchWhenIsvprodidIsDifferent)
 {
-    EnclaveIdentityVectorModel model;
-    model.applyTo(enclaveReport);
+    enclaveReport.applyEnclaveIdentity(model);
     model.isvprodid = 11;
-    string json = model.toV2JSON();
+    string json = model.toJSON();
 
-    auto enclaveIdentity = parser.parse(generateEnclaveIdentity(json));
+    auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(enclaveIdentity.get(), getEnclaveReport());
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVPRODID_MISMATCH, result);
+    checkVerCollInfoEmpty();
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportNotSupportedWhenIsvsvnIsBelowAllLevels)
 {
-    EnclaveIdentityVectorModel model;
-    model.applyTo(enclaveReport);
+    enclaveReport.applyEnclaveIdentity(model);
     enclaveReport.isvSvn = 2;
-    string json = model.toV2JSON();
+    string json = model.toJSON();
 
-    auto enclaveIdentity = parser.parse(generateEnclaveIdentity(json));
+    auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(enclaveIdentity.get(), getEnclaveReport());
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED, result);
+    checkVerCollInfoEmpty();
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportRevokedWhenIsvsvnIsOnRevokedLevel)
 {
-    EnclaveIdentityVectorModel model;
-    model.applyTo(enclaveReport);
+    enclaveReport.applyEnclaveIdentity(model);
     enclaveReport.isvSvn = 4;
-    string json = model.toV2JSON();
+    string json = model.toJSON();
 
-    auto enclaveIdentity = parser.parse(generateEnclaveIdentity(json));
+    auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(enclaveIdentity.get(), getEnclaveReport());
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_REVOKED, result);
+    checkVerCollInfoFilled({revokedLevelAdvisory});
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportOutOfDateWhenIsvsvnIsOnOutOfDateLevel)
 {
-    EnclaveIdentityVectorModel model;
-    model.applyTo(enclaveReport);
+    enclaveReport.applyEnclaveIdentity(model);
     enclaveReport.isvSvn = 5;
-    string json = model.toV2JSON();
+    string json = model.toJSON();
 
-    auto enclaveIdentity = parser.parse(generateEnclaveIdentity(json));
+    auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(enclaveIdentity.get(), getEnclaveReport());
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_OUT_OF_DATE, result);
+    checkVerCollInfoFilled({outOfDateLevelAdvisory});
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnStatusOkWhenJsonIsOk)
 {
-    EnclaveIdentityVectorModel model;
-    model.applyTo(enclaveReport);
-    string json = model.toV2JSON();
+    enclaveReport.applyEnclaveIdentity(model);
+    string json = model.toJSON();
 
-    auto enclaveIdentity = parser.parse(generateEnclaveIdentity(json));
+    auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(enclaveIdentity.get(), getEnclaveReport());
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
 
     ASSERT_EQ(STATUS_OK, result);
+    checkVerCollInfoFilled({});
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportNotSupportedWhenIsvSvnisOneAndEnclaveIdentityHavingTcbsBelowFive)
 {
     EnclaveIdentityVectorModel modelISVSVN2;
     EnclaveIdentityVectorModel modelISVSVN3;
-    EnclaveIdentityVectorModel modelISVSVN4;
 
     modelISVSVN2.tcbLevels.push_back({2, "2018-08-22T12:00:00Z", "Revoked"});
     modelISVSVN3.tcbLevels.push_back({3, "2018-08-22T12:00:00Z", "Revoked"});
-    modelISVSVN4.tcbLevels.push_back({4, "2018-08-22T12:00:00Z", "Revoked"});
 
-    modelISVSVN2.applyTo(enclaveReport);
+    enclaveReport.applyEnclaveIdentity(modelISVSVN2);
     enclaveReport.isvSvn = 1;
-    string json = modelISVSVN2.toV2JSON();
-    auto enclaveIdentityISVSVN2 = parser.parse(generateEnclaveIdentity(json));
-    auto resultISVSVN2 = enclaveReportVerifier.verify(enclaveIdentityISVSVN2.get(), getEnclaveReport());
+    string json = modelISVSVN2.toJSON();
+    auto enclaveIdentityISVSVN2 = EnclaveIdentity::parse(generateEnclaveIdentity(json));
+    auto resultISVSVN2 = enclaveReportVerifier.verify(&enclaveIdentityISVSVN2, getEnclaveReport(), &verificationCollateralInfo);
 
-    modelISVSVN3.applyTo(enclaveReport);
+    enclaveReport.applyEnclaveIdentity(modelISVSVN3);
     enclaveReport.isvSvn = 1;
-    json = modelISVSVN3.toV2JSON();
-    auto enclaveIdentityISVSVN3 = parser.parse(generateEnclaveIdentity(json));
-    auto resultISVSVN3 = enclaveReportVerifier.verify(enclaveIdentityISVSVN3.get(), getEnclaveReport());
-
-    modelISVSVN4.applyTo(enclaveReport);
-    enclaveReport.isvSvn = 1;
-    json = modelISVSVN4.toV2JSON();
-    auto enclaveIdentityISVSVN4 = parser.parse(generateEnclaveIdentity(json));
-    auto resultISVSVN4 = enclaveReportVerifier.verify(enclaveIdentityISVSVN4.get(), getEnclaveReport());
+    json = modelISVSVN3.toJSON();
+    auto enclaveIdentityISVSVN3 = EnclaveIdentity::parse(generateEnclaveIdentity(json));
+    auto resultISVSVN3 = enclaveReportVerifier.verify(&enclaveIdentityISVSVN3, getEnclaveReport(), &verificationCollateralInfo);
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED, resultISVSVN2);
+    checkVerCollInfoEmpty();
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED, resultISVSVN3);
-    ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED, resultISVSVN4);
+    checkVerCollInfoEmpty();
 }

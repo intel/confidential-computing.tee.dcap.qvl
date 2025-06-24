@@ -40,7 +40,6 @@
 #include <Mocks/PckCrlVerifierMock.h>
 #include <Mocks/EnclaveIdentityMock.h>
 #include <CertVerification/X509Constants.h>
-#include <Verifiers/EnclaveIdentityV2.h>
 #include "KeyHelpers.h"
 
 using namespace testing;
