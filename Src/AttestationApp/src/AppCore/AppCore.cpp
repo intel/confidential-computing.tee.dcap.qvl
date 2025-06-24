@@ -127,7 +127,15 @@ bool AppCore::runVerification(const AppOptions& options, std::ostream& logger) c
         }
 
         const auto quote = fileReader->readBinaryContent(options.quoteFile);
-        const auto quoteVerifyStatus = attestationLib->verifyQuote(quote, pckCert, intermediateCaCrl, tcbInfo, qeIdentity);
+        std::vector<uint8_t> verCollInfo(VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN);
+        const auto quoteVerifyStatus = attestationLib->verifyQuote(quote, pckCert, intermediateCaCrl, tcbInfo, qeIdentity, verCollInfo);
+
+        const bool isVerCollInfoFilled = verCollInfo != std::vector<uint8_t>(VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN);
+        if (!options.verCollInfoFile.empty() && isVerCollInfoFilled)
+        {
+            fileReader->saveBinaryContent(options.verCollInfoFile, verCollInfo);
+        }
+
         outputResult("Quote", quoteVerifyStatus, logger);
 
         return (pckVerifyStatus == STATUS_OK) && (tcbVerifyStatus == STATUS_OK) && (quoteVerifyStatus == STATUS_OK) &&

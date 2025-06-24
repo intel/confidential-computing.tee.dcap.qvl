@@ -52,7 +52,8 @@ public:
                        const std::string& pckCertChain,
                        const std::string& pckCrl,
                        const std::string& tcbInfo,
-                       const std::string& qeIdentity = std::string{}) const override;
+                       const std::string& qeIdentity,
+                       std::vector<uint8_t>& verificationCollateralInfo) const override;
 
     Status verifyPCKCertificate(const std::string& pemCertChain,
                                 const std::string& pemRootCaCRL,

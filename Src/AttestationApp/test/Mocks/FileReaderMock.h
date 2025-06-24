@@ -42,6 +42,7 @@ class FileReaderMock : public IFileReader
 public:
     MOCK_CONST_METHOD1(readContent, std::string(const std::string&));
     MOCK_CONST_METHOD1(readBinaryContent, std::vector<uint8_t>(const std::string&));
+    MOCK_CONST_METHOD2(saveBinaryContent, void(const std::string&, const std::vector<uint8_t>));
 };
 }}}}
 

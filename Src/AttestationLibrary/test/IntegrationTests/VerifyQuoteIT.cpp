@@ -1,32 +1,32 @@
 /*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+ * Copyright (C) 2024 Intel Corporation
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted provided that the following conditions are met:
  *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Intel Corporation nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+ * OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
  */
 
 #include <gtest/gtest.h>
@@ -36,7 +36,7 @@
 #include <CertVerification/X509Constants.h>
 #include <QuoteV3Generator.h>
 #include <QuoteV4Generator.h>
-#include <EnclaveIdentityGenerator.h>
+#include "IdentityGenerator.h"
 #include <EcdsaSignatureGenerator.h>
 #include <QuoteVerification/QuoteConstants.h>
 #include <TcbInfoJsonGenerator.h>
@@ -44,6 +44,8 @@
 #include <X509CrlGenerator.h>
 #include <DigestUtils.h>
 #include <KeyHelpers.h>
+#include <cstring>
+#include "Utils/TimeUtils.h"
 
 using namespace std;
 using namespace testing;
@@ -82,6 +84,10 @@ struct VerifyQuoteIT : public Test
     crypto::X509_uptr cert = crypto::make_unique<X509>(nullptr);
     crypto::X509_uptr interCert = crypto::make_unique<X509>(nullptr);
 
+    const std::string tcbInfoAdvisory = "INTEL-SA-00001";
+    const std::string enclaveIdentityAdvisory = "INTEL-SA-00002";
+    const std::string tdxModuleIdentityAdvisory = "INTEL-SA-00003";
+
     QuoteV3Generator quoteV3Generator;
     QuoteV4Generator quoteV4Generator;
     uint32_t version = 2;
@@ -106,6 +112,7 @@ struct VerifyQuoteIT : public Test
     string positiveSgxTcbInfoV3JsonBody;
     string positiveQEIdentityV2JsonBody;
     std::vector<TcbLevelV3> tdxTcbLevels;
+    std::vector<TdxModuleIdentity> tdxModuleIdentities;
 
     test::QuoteV3Generator::EnclaveReport enclaveReport;
 
@@ -135,7 +142,7 @@ struct VerifyQuoteIT : public Test
                 {},
                 5,
                 "UpToDate",
-                "2058-08-23T10:09:10Z"
+                tcbDate
         });
 
         positiveSgxTcbInfoV3JsonBody = tcbInfoJsonV3Body("SGX", 3, issueDate, nextUpdate, fmspcStr, pceIdStr,
@@ -147,13 +154,20 @@ struct VerifyQuoteIT : public Test
                 getRandomTcbComponent(),
                 5,
                 "UpToDate",
-                "2058-08-23T10:09:10Z"
+                tcbDate
+        });
+        tdxModuleIdentities.push_back(TdxModuleIdentity{
+           "TDX_" + bytesToHexString({tdxTcbLevels[0].tdxTcbComponents[1].svn}),
+           "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+           "0000000000000000",
+           "FFFFFFFFFFFFFFFF",
+           {TdxModuleTcbLevel{isvsvn, "UpToDate", tcbDate, {}}}
         });
         positiveTdxTcbInfoV3JsonBody = tcbInfoJsonV3Body("TDX", 3, issueDate, nextUpdate, fmspcStr, pceIdStr,
                                                          0, 1, tdxTcbLevels, true, tdxModule);
-        EnclaveIdentityVectorModel model;
-        positiveQEIdentityV2JsonBody = model.toV2JSON();
-        model.applyTo(enclaveReport);
+        EnclaveIdentityVectorModel model(tcbDate);
+        positiveQEIdentityV2JsonBody = model.toJSON();
+        enclaveReport.applyEnclaveIdentity(model);
     }
 
     std::string getValidCrl(const crypto::X509_uptr &ucert)
@@ -204,6 +218,40 @@ struct VerifyQuoteIT : public Test
         return signatureArr;
     }
 
+    void checkVerCollInfo(std::vector<uint8_t>& verCollInfo)
+    {
+        uint16_t _id, _version;
+        time_t _issueDateMin, _issueDateMax, _expirationDate, _tcbDate;
+        unsigned int offset = 0, _tcbEvalNumber;
+
+        std::memcpy(&_id, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_ID_SIZE_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_ID_SIZE_BYTE_LEN;
+
+        std::memcpy(&_version, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_VERSION_SIZE_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_VERSION_SIZE_BYTE_LEN;
+
+        std::memcpy(&_issueDateMin, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_ISSUE_DATE_MIN_SIZE_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_ISSUE_DATE_MIN_SIZE_BYTE_LEN;
+
+        std::memcpy(&_issueDateMax, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_ISSUE_DATE_MAX_SIZE_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_ISSUE_DATE_MAX_SIZE_BYTE_LEN;
+
+        std::memcpy(&_expirationDate, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_EXPIRATION_DATE_SIZE_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_EXPIRATION_DATE_SIZE_BYTE_LEN;
+
+        std::memcpy(&_tcbEvalNumber, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_TCB_EVALUATION_DATA_NUMBER_SIZE_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_EVALUATION_DATA_NUMBER_SIZE_BYTE_LEN;
+
+        std::memcpy(&_tcbDate, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN);
+
+        ASSERT_EQ(1, _id);
+        ASSERT_EQ(1, _version);
+        ASSERT_EQ(getEpochTimeFromString(issueDate), _issueDateMin);
+        ASSERT_EQ(getEpochTimeFromString(issueDate), _issueDateMax);
+        ASSERT_EQ(getEpochTimeFromString(nextUpdate), _expirationDate);
+        ASSERT_EQ(tcbEvaluationDataNumber, _tcbEvalNumber);
+        ASSERT_EQ(getEpochTimeFromString(tcbDate), _tcbDate);
+    }
 };
 
 TEST_F(VerifyQuoteIT, shouldReturnedMissingParmatersWhenQuoteIsNull)
@@ -487,8 +535,8 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifySgxQuoteV4Successffuly)
     test::QuoteV4Generator::EnclaveReport qeReport{};
 
     EnclaveIdentityVectorModel model;
-    positiveQEIdentityV2JsonBody = model.toV2JSON();
-    model.applyTo(qeReport);
+    positiveQEIdentityV2JsonBody = model.toJSON();
+    qeReport.applyEnclaveIdentity(model);
 
     test::QuoteV4Generator::QeAuthData qeAuthData;
     qeAuthData.data = {};
@@ -592,14 +640,15 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifySgxQuoteV4WithoutQeIdentit
     EXPECT_EQ(STATUS_OK, result);
 }
 
-TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyTdxQuoteV4Successfully)
+TEST_F(VerifyQuoteIT, shouldReturnedStatusOKAndCreateVerificationCollateralInfoWhenVerifyTdxQuoteV4Successfully)
 {
     // GIVEN
     auto pckCertKeyPtr = key.get();
 
-    tdxTcbLevels[0].tdxTcbComponents[1].svn = 0; // major TDX module version. To skip TDX Module identity matching
+    tdxTcbLevels[0].advisoryIds.emplace_back(tcbInfoAdvisory);
+    tdxModuleIdentities[0].tcbLevels[0].advisoryIds.emplace_back(tdxModuleIdentityAdvisory);
     positiveTdxTcbInfoV3JsonBody = tcbInfoJsonV3Body("TDX", 3, issueDate, nextUpdate, fmspcStr, pceIdStr,
-                                                     0, 1, tdxTcbLevels, true, tdxModule);
+                                                     0, 1, tdxTcbLevels, true, tdxModule, true, tdxModuleIdentities);
 
     quoteV4Generator.getHeader().teeType = constants::TEE_TYPE_TDX;
     std::copy_n(tdxModule.mrsigner.begin(), tdxModule.mrsigner.size(), quoteV4Generator.getTdReport().mrSignerSeam.begin());
@@ -608,12 +657,13 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyTdxQuoteV4Successfully)
 
     test::QuoteV4Generator::EnclaveReport qeReport{};
 
-    EnclaveIdentityVectorModel model;
+    EnclaveIdentityVectorModel model(tcbDate);
     model.version = 2;
     model.id = "TD_QE";
+    model.tcbLevels[0].advisoryIds.emplace_back(enclaveIdentityAdvisory);
 
-    positiveQEIdentityV2JsonBody = model.toV2JSON();
-    model.applyTo(qeReport);
+    positiveQEIdentityV2JsonBody = model.toJSON();
+    qeReport.applyEnclaveIdentity(model);
 
     test::QuoteV4Generator::QeAuthData qeAuthData;
     qeAuthData.data = {};
@@ -654,14 +704,100 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyTdxQuoteV4Successfully)
     qeIdentityBodyBytes.insert(qeIdentityBodyBytes.end(), positiveQEIdentityV2JsonBody.begin(), positiveQEIdentityV2JsonBody.end());
     auto signatureQE = EcdsaSignatureGenerator::signECDSA_SHA256(qeIdentityBodyBytes, key.get());
     auto qeIdentityJsonWithSignature = ::enclaveIdentityJsonWithSignature(positiveQEIdentityV2JsonBody,
-                                                                     EcdsaSignatureGenerator::signatureToHexString(
-                                                                             signatureQE));
-
+                                                                          EcdsaSignatureGenerator::signatureToHexString(signatureQE));
     // WHEN
-    auto result = sgxAttestationVerifyQuote(quote.data(), (uint32_t) quote.size(), pckPem.c_str(), pckCrl.c_str(),
-                                            tcbInfoJsonWithSignature.c_str(), qeIdentityJsonWithSignature.c_str());
+    std::vector<std::uint8_t> verCollInfo(constants::VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN);
+    auto result = sgxAttestationVerifyQuoteEx(quote.data(), (uint32_t) quote.size(), pckPem.c_str(), pckCrl.c_str(),
+                                              tcbInfoJsonWithSignature.c_str(), qeIdentityJsonWithSignature.c_str(),
+                                              verCollInfo.data(), (uint32_t) verCollInfo.size());
+    std::string verCollInfoStr(verCollInfo.begin(), verCollInfo.end());
 
     // THEN
+    checkVerCollInfo(verCollInfo);
+    ASSERT_TRUE(verCollInfoStr.find(tcbInfoAdvisory) != std::string::npos);
+    ASSERT_TRUE(verCollInfoStr.find(enclaveIdentityAdvisory) != std::string::npos);
+    ASSERT_TRUE(verCollInfoStr.find(tdxModuleIdentityAdvisory) != std::string::npos);
+
+    EXPECT_EQ(STATUS_OK, result);
+}
+
+TEST_F(VerifyQuoteIT, shouldReturnedStatusOKAndCreateVerificationCollateralInfoWhenVerifyTdxQuoteV4WithoutTdxModuleIdentitySuccessfully)
+{
+    // GIVEN
+    auto pckCertKeyPtr = key.get();
+
+    tdxTcbLevels[0].advisoryIds.emplace_back(tcbInfoAdvisory);
+    tdxTcbLevels[0].tdxTcbComponents[1].svn = 0; // major TDX module version. To skip TDX Module identity matching
+    positiveTdxTcbInfoV3JsonBody = tcbInfoJsonV3Body("TDX", 3, issueDate, nextUpdate, fmspcStr, pceIdStr,
+                                                     0, 1, tdxTcbLevels, true, tdxModule);
+
+    quoteV4Generator.getHeader().teeType = constants::TEE_TYPE_TDX;
+    std::copy_n(tdxModule.mrsigner.begin(), tdxModule.mrsigner.size(), quoteV4Generator.getTdReport().mrSignerSeam.begin());
+    quoteV4Generator.getTdReport().seamAttributes.fill(0x00);
+    quoteV4Generator.getTdReport().teeTcbSvn = {0xFF, tdxTcbLevels[0].tdxTcbComponents[1].svn, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,};
+
+    test::QuoteV4Generator::EnclaveReport qeReport{};
+
+    EnclaveIdentityVectorModel model(tcbDate);
+    model.version = 2;
+    model.id = "TD_QE";
+    model.tcbLevels[0].advisoryIds.emplace_back(enclaveIdentityAdvisory);
+
+    positiveQEIdentityV2JsonBody = model.toJSON();
+    qeReport.applyEnclaveIdentity(model);
+
+    test::QuoteV4Generator::QeAuthData qeAuthData;
+    qeAuthData.data = {};
+    qeAuthData.size = 0;
+
+    test::QuoteV4Generator::CertificationData certificationData;
+    certificationData.keyDataType = constants::PCK_ID_PCK_CERT_CHAIN;
+    certificationData.keyData = {};
+    certificationData.size = 0;
+
+    test::QuoteV4Generator::QEReportCertificationData qeReportCertificationData;
+    qeReportCertificationData.qeAuthData = qeAuthData;
+    qeReportCertificationData.qeReport = qeReport;
+    qeReportCertificationData.certificationData = certificationData;
+    qeReportCertificationData.qeReport.reportData = assingFirst32(DigestUtils::sha256DigestArray(concat(test::getRawPub(*key), qeAuthData.data)));
+    qeReportCertificationData.qeReportSignature.signature = signEnclaveReport(qeReportCertificationData.qeReport, *pckCertKeyPtr);
+
+    test::QuoteV4Generator::CertificationData qeCertificationData;
+    qeCertificationData.keyDataType = constants::PCK_ID_QE_REPORT_CERTIFICATION_DATA;
+    qeCertificationData.keyData = qeReportCertificationData.bytes();
+    qeCertificationData.size = static_cast<uint16_t>(qeCertificationData.keyData.size());
+
+    quoteV4Generator.withCertificationData(qeCertificationData);
+    quoteV4Generator.getAuthSize() = 134 + (uint32_t) qeCertificationData.keyData.size();
+    quoteV4Generator.getAuthData().ecdsaAttestationKey.publicKey = test::getRawPub(*key);
+    quoteV4Generator.getAuthData().ecdsaSignature.signature =
+            signAndGetRaw(concat(quoteV4Generator.getHeader().bytes(), quoteV4Generator.getTdReport().bytes()), *pckCertKeyPtr);
+
+    auto quote = quoteV4Generator.buildTdxQuote();
+    auto pckPem = certGenerator.x509ToString(cert.get());
+    auto pckCrl = getValidCrl(interCert);
+    auto tcbInfoBodyBytes = Bytes{};
+    tcbInfoBodyBytes.insert(tcbInfoBodyBytes.end(), positiveTdxTcbInfoV3JsonBody.begin(), positiveTdxTcbInfoV3JsonBody.end());
+    auto signatureTcb = EcdsaSignatureGenerator::signECDSA_SHA256(tcbInfoBodyBytes, key.get());
+    auto tcbInfoJsonWithSignature = tcbInfoJsonGenerator(positiveTdxTcbInfoV3JsonBody,
+                                                         EcdsaSignatureGenerator::signatureToHexString(signatureTcb));
+    auto qeIdentityBodyBytes = Bytes{};
+    qeIdentityBodyBytes.insert(qeIdentityBodyBytes.end(), positiveQEIdentityV2JsonBody.begin(), positiveQEIdentityV2JsonBody.end());
+    auto signatureQE = EcdsaSignatureGenerator::signECDSA_SHA256(qeIdentityBodyBytes, key.get());
+    auto qeIdentityJsonWithSignature = ::enclaveIdentityJsonWithSignature(positiveQEIdentityV2JsonBody,
+                                                                          EcdsaSignatureGenerator::signatureToHexString(signatureQE));
+    // WHEN
+    std::vector<std::uint8_t> verCollInfo(constants::VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN);
+    auto result = sgxAttestationVerifyQuoteEx(quote.data(), (uint32_t) quote.size(), pckPem.c_str(), pckCrl.c_str(),
+                                              tcbInfoJsonWithSignature.c_str(), qeIdentityJsonWithSignature.c_str(),
+                                              verCollInfo.data(), (uint32_t) verCollInfo.size());
+    std::string verCollInfoStr(verCollInfo.begin(), verCollInfo.end());
+
+    // THEN
+    checkVerCollInfo(verCollInfo);
+    ASSERT_TRUE(verCollInfoStr.find(tcbInfoAdvisory) != std::string::npos);
+    ASSERT_TRUE(verCollInfoStr.find(enclaveIdentityAdvisory) != std::string::npos);
+    ASSERT_TRUE(verCollInfoStr.find(tdxModuleIdentityAdvisory) == std::string::npos); // no advisoryIds from tdxModuleIdentity
     EXPECT_EQ(STATUS_OK, result);
 }
 
@@ -677,12 +813,12 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusTdxModuleMismatchWhenVerifyTdxQuoteV4W
 
     test::QuoteV4Generator::EnclaveReport qeReport{};
 
-    EnclaveIdentityVectorModel model;
+    EnclaveIdentityVectorModel model(tcbDate);
     model.version = 2;
     model.id = "TD_QE";
 
-    positiveQEIdentityV2JsonBody = model.toV2JSON();
-    model.applyTo(qeReport);
+    positiveQEIdentityV2JsonBody = model.toJSON();
+    qeReport.applyEnclaveIdentity(model);
 
     test::QuoteV4Generator::QeAuthData qeAuthData;
     qeAuthData.data = {};
@@ -744,8 +880,8 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusTdxModuleMismatchWhenVerifyTdxQuoteV4W
     model.version = 2;
     model.id = "TD_QE";
 
-    positiveQEIdentityV2JsonBody = model.toV2JSON();
-    model.applyTo(qeReport);
+    positiveQEIdentityV2JsonBody = model.toJSON();
+    qeReport.applyEnclaveIdentity(model);
 
     test::QuoteV4Generator::QeAuthData qeAuthData;
     qeAuthData.data = {};
@@ -791,14 +927,15 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusTdxModuleMismatchWhenVerifyTdxQuoteV4W
     EXPECT_EQ(STATUS_TDX_MODULE_MISMATCH, result);
 }
 
-TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyTdxQuoteV4WithoutQeIdentitySuccessfully)
+TEST_F(VerifyQuoteIT, shouldReturnedStatusOKAndCreateVerificationCollateralInfoWhenVerifyTdxQuoteV4WithoutQeIdentitySuccessfully)
 {
     // GIVEN
     auto pckCertKeyPtr = key.get();
 
-    tdxTcbLevels[0].tdxTcbComponents[1].svn = 0; // major TDX module version. To skip TDX Module identity matching
+    tdxTcbLevels[0].advisoryIds.emplace_back(tcbInfoAdvisory);
+    tdxModuleIdentities[0].tcbLevels[0].advisoryIds.emplace_back(tdxModuleIdentityAdvisory);
     positiveTdxTcbInfoV3JsonBody = tcbInfoJsonV3Body("TDX", 3, issueDate, nextUpdate, fmspcStr, pceIdStr,
-                                                     0, 1, tdxTcbLevels, true, tdxModule);
+                                                     0, 1, tdxTcbLevels, true, tdxModule, true, tdxModuleIdentities);
 
     quoteV4Generator.getHeader().teeType = constants::TEE_TYPE_TDX;
     std::copy_n(tdxModule.mrsigner.begin(), tdxModule.mrsigner.size(), quoteV4Generator.getTdReport().mrSignerSeam.begin());
@@ -844,14 +981,21 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyTdxQuoteV4WithoutQeIdentit
                                                          EcdsaSignatureGenerator::signatureToHexString(signatureTcb));
 
     // WHEN
-    auto result = sgxAttestationVerifyQuote(quote.data(), (uint32_t) quote.size(), pckPem.c_str(), pckCrl.c_str(),
-                                            tcbInfoJsonWithSignature.c_str(), nullptr);
+    std::vector<std::uint8_t> verCollInfo(constants::VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN);
+    auto result = sgxAttestationVerifyQuoteEx(quote.data(), (uint32_t) quote.size(), pckPem.c_str(), pckCrl.c_str(),
+                                              tcbInfoJsonWithSignature.c_str(), nullptr,
+                                              verCollInfo.data(), (uint32_t) verCollInfo.size());
+    std::string verCollInfoStr(verCollInfo.begin(), verCollInfo.end());
 
     // THEN
+    checkVerCollInfo(verCollInfo);
+    ASSERT_TRUE(verCollInfoStr.find(tcbInfoAdvisory) != std::string::npos);
+    ASSERT_TRUE(verCollInfoStr.find(enclaveIdentityAdvisory) == std::string::npos); // no advisoryId from enclaveIdentity
+    ASSERT_TRUE(verCollInfoStr.find(tdxModuleIdentityAdvisory) != std::string::npos);
     EXPECT_EQ(STATUS_OK, result);
 }
 
-TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyQuoteV3WithSgxTcbInfoV3Successffuly)
+TEST_F(VerifyQuoteIT, shouldReturnedStatusOKAndNoAdvisoriesInVerificationCollateralInfoWhenVerifyQuoteV3WithSgxTcbInfoV3Successffuly)
 {
     // GIVEN
     auto pckCertKeyPtr = key.get();
@@ -891,9 +1035,100 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKWhenVerifyQuoteV3WithSgxTcbInfoV3Suc
                                                                              signatureQE));
 
     // WHEN
-    auto result = sgxAttestationVerifyQuote(quote.data(), (uint32_t) quote.size(), pckPem.c_str(), pckCrl.c_str(),
-                                            tcbInfoJsonWithSignature.c_str(), qeIdentityJsonWithSignature.c_str());
+    std::vector<std::uint8_t> verCollInfo(constants::VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN);
+    auto result = sgxAttestationVerifyQuoteEx(quote.data(), (uint32_t) quote.size(), pckPem.c_str(), pckCrl.c_str(),
+                                              tcbInfoJsonWithSignature.c_str(), nullptr,
+                                              verCollInfo.data(), (uint32_t) verCollInfo.size());
+    std::string verCollInfoStr(verCollInfo.begin(), verCollInfo.end());
 
     // THEN
+    checkVerCollInfo(verCollInfo);
+    // matched TcbLevels have empty advisoryIds
+    ASSERT_TRUE(verCollInfoStr.find(tcbInfoAdvisory) == std::string::npos); // no advisoryId from tcbInfo
+    ASSERT_TRUE(verCollInfoStr.find(enclaveIdentityAdvisory) == std::string::npos); // no advisoryId from enclaveIdentity
+    ASSERT_TRUE(verCollInfoStr.find(tdxModuleIdentityAdvisory) == std::string::npos); // no advisoryId from tdxModuleIdentity
     EXPECT_EQ(STATUS_OK, result);
+}
+
+TEST_F(VerifyQuoteIT, shouldReturnedStatusInvalidParameterInVerifyQuoteWhenAdvisoryIdsOfVerCollInfoExceens450bytes)
+{
+    // GIVEN
+    auto pckCertKeyPtr = key.get();
+
+    tdxTcbLevels[0].advisoryIds.emplace_back(tcbInfoAdvisory);
+
+    // adding advisories so that they will exceed the max size in verCollInfo (over 450 bytes)
+    for (auto i = 10000; i < 10100; i++)
+    {
+        tdxTcbLevels[0].advisoryIds.emplace_back("INTEL-SA-" + std::to_string(i));
+    }
+
+    tdxModuleIdentities[0].tcbLevels[0].advisoryIds.emplace_back(tdxModuleIdentityAdvisory);
+    positiveTdxTcbInfoV3JsonBody = tcbInfoJsonV3Body("TDX", 3, issueDate, nextUpdate, fmspcStr, pceIdStr,
+                                                     0, 1, tdxTcbLevels, true, tdxModule, true, tdxModuleIdentities);
+
+    quoteV4Generator.getHeader().teeType = constants::TEE_TYPE_TDX;
+    std::copy_n(tdxModule.mrsigner.begin(), tdxModule.mrsigner.size(), quoteV4Generator.getTdReport().mrSignerSeam.begin());
+    quoteV4Generator.getTdReport().seamAttributes.fill(0x00);
+    quoteV4Generator.getTdReport().teeTcbSvn = {0xFF, tdxTcbLevels[0].tdxTcbComponents[1].svn, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,};
+
+    test::QuoteV4Generator::EnclaveReport qeReport{};
+
+    EnclaveIdentityVectorModel model(tcbDate);
+    model.version = 2;
+    model.id = "TD_QE";
+    model.tcbLevels[0].advisoryIds.emplace_back(enclaveIdentityAdvisory);
+
+    positiveQEIdentityV2JsonBody = model.toJSON();
+    qeReport.applyEnclaveIdentity(model);
+
+    test::QuoteV4Generator::QeAuthData qeAuthData;
+    qeAuthData.data = {};
+    qeAuthData.size = 0;
+
+    test::QuoteV4Generator::CertificationData certificationData;
+    certificationData.keyDataType = constants::PCK_ID_PCK_CERT_CHAIN;
+    certificationData.keyData = {};
+    certificationData.size = 0;
+
+    test::QuoteV4Generator::QEReportCertificationData qeReportCertificationData;
+    qeReportCertificationData.qeAuthData = qeAuthData;
+    qeReportCertificationData.qeReport = qeReport;
+    qeReportCertificationData.certificationData = certificationData;
+    qeReportCertificationData.qeReport.reportData = assingFirst32(DigestUtils::sha256DigestArray(concat(test::getRawPub(*key), qeAuthData.data)));
+    qeReportCertificationData.qeReportSignature.signature = signEnclaveReport(qeReportCertificationData.qeReport, *pckCertKeyPtr);
+
+    test::QuoteV4Generator::CertificationData qeCertificationData;
+    qeCertificationData.keyDataType = constants::PCK_ID_QE_REPORT_CERTIFICATION_DATA;
+    qeCertificationData.keyData = qeReportCertificationData.bytes();
+    qeCertificationData.size = static_cast<uint16_t>(qeCertificationData.keyData.size());
+
+    quoteV4Generator.withCertificationData(qeCertificationData);
+    quoteV4Generator.getAuthSize() = 134 + (uint32_t) qeCertificationData.keyData.size();
+    quoteV4Generator.getAuthData().ecdsaAttestationKey.publicKey = test::getRawPub(*key);
+    quoteV4Generator.getAuthData().ecdsaSignature.signature =
+            signAndGetRaw(concat(quoteV4Generator.getHeader().bytes(), quoteV4Generator.getTdReport().bytes()), *pckCertKeyPtr);
+
+    auto quote = quoteV4Generator.buildTdxQuote();
+    auto pckPem = certGenerator.x509ToString(cert.get());
+    auto pckCrl = getValidCrl(interCert);
+    auto tcbInfoBodyBytes = Bytes{};
+    tcbInfoBodyBytes.insert(tcbInfoBodyBytes.end(), positiveTdxTcbInfoV3JsonBody.begin(), positiveTdxTcbInfoV3JsonBody.end());
+    auto signatureTcb = EcdsaSignatureGenerator::signECDSA_SHA256(tcbInfoBodyBytes, key.get());
+    auto tcbInfoJsonWithSignature = tcbInfoJsonGenerator(positiveTdxTcbInfoV3JsonBody,
+                                                         EcdsaSignatureGenerator::signatureToHexString(signatureTcb));
+    auto qeIdentityBodyBytes = Bytes{};
+    qeIdentityBodyBytes.insert(qeIdentityBodyBytes.end(), positiveQEIdentityV2JsonBody.begin(), positiveQEIdentityV2JsonBody.end());
+    auto signatureQE = EcdsaSignatureGenerator::signECDSA_SHA256(qeIdentityBodyBytes, key.get());
+    auto qeIdentityJsonWithSignature = ::enclaveIdentityJsonWithSignature(positiveQEIdentityV2JsonBody,
+                                                                          EcdsaSignatureGenerator::signatureToHexString(signatureQE));
+    // WHEN
+    std::vector<std::uint8_t> verCollInfo(constants::VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN);
+    auto result = sgxAttestationVerifyQuoteEx(quote.data(), (uint32_t) quote.size(), pckPem.c_str(), pckCrl.c_str(),
+                                              tcbInfoJsonWithSignature.c_str(), qeIdentityJsonWithSignature.c_str(),
+                                              verCollInfo.data(), (uint32_t) verCollInfo.size());
+    std::string verCollInfoStr(verCollInfo.begin(), verCollInfo.end());
+
+    // THEN
+    EXPECT_EQ(STATUS_INVALID_PARAMETER, result);
 }

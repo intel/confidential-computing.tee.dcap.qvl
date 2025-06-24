@@ -30,7 +30,6 @@
  */
 
 #include "EnclaveIdentityVerifier.h"
-#include "EnclaveIdentityV2.h"
 #include "Utils/TimeUtils.h"
 #include <Utils/Logger.h>
 
@@ -52,7 +51,7 @@ EnclaveIdentityVerifier::EnclaveIdentityVerifier(std::unique_ptr<CommonVerifier>
 }
 
 Status EnclaveIdentityVerifier::verify(
-            const EnclaveIdentityV2 &enclaveIdentity,
+            const dcap::parser::json::EnclaveIdentity &enclaveIdentity,
             const CertificateChain &chain,
             const pckparser::CrlStore &rootCaCrl,
             const dcap::parser::x509::Certificate &trustedRoot,

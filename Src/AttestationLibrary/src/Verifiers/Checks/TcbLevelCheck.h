@@ -36,6 +36,7 @@
 #include <SgxEcdsaAttestation/QuoteVerification.h>
 #include "SgxEcdsaAttestation/AttestationParsers.h"
 #include "QuoteVerification/Quote.h"
+#include "QuoteVerification/VerificationCollateralInfo.h"
 
 #include "Utils/Optional.h"
 
@@ -44,7 +45,8 @@ using namespace intel::sgx::dcap::parser::json;
 namespace intel::sgx::dcap {
 
 Status checkTcbLevel(const TcbInfo &tcbInfo, const parser::x509::PckCertificate &pckCert, const Quote &quote,
-                     const Optional<Status> &qeTcbStatus, Optional<TdxModuleIdentity> &tdxModuleIdentity);
+                     const Optional<Status> &qeTcbStatus, Optional<TdxModuleIdentity> &tdxModuleIdentity,
+                     dcap::VerificationCollateralInfo &verificationCollateralInfo);
 
 } // namespace intel::sgx::dcap
 

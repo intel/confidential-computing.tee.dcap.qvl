@@ -30,10 +30,7 @@
  */
 
 #include "EnclaveReportVerifier.h"
-#include "QuoteVerification/ByteOperands.h"
-#include "EnclaveIdentityV2.h"
-#include "EnclaveIdentityV2.h"
-#include "Utils/StatusNotSupportedException.h"
+#include "Utils/ByteOperands.h"
 #include <algorithm>
 #include <functional>
 #include <numeric>
@@ -44,7 +41,9 @@
 
 namespace intel { namespace sgx { namespace dcap {
 
-Status EnclaveReportVerifier::verify(const EnclaveIdentityV2 *enclaveIdentity, const EnclaveReport& enclaveReport) const
+Status EnclaveReportVerifier::verify(const parser::json::EnclaveIdentity *enclaveIdentity,
+                                     const EnclaveReport& enclaveReport,
+                                     VerificationCollateralInfo *verificationCollateralInfo) const
 {
     const auto miscselectMask = vectorToUint32(enclaveIdentity->getMiscselectMask());
     const auto miscselect = vectorToUint32(enclaveIdentity->getMiscselect());
@@ -89,10 +88,18 @@ Status EnclaveReportVerifier::verify(const EnclaveIdentityV2 *enclaveIdentity, c
     /// 4.1.2.9.9 & 4.1.2.9.10
     try
     {
-        auto enclaveIdentityStatus = enclaveIdentity->getTcbStatus(enclaveReport.isvSvn);
-        if (enclaveIdentityStatus != TcbStatus::UpToDate)
+        const auto matchedTcbLevel = enclaveIdentity->getTcbLevel(enclaveReport.isvSvn);
+        auto enclaveIdentityStatus = matchedTcbLevel.getTcbStatus();
+
+        /// 4.1.2.5.19
+        if(verificationCollateralInfo != nullptr)
         {
-            if (enclaveIdentityStatus == TcbStatus::Revoked)
+            verificationCollateralInfo->addEnclaveIdentityData(*enclaveIdentity, matchedTcbLevel);
+        }
+
+        if (enclaveIdentityStatus != parser::json::TcbStatus::UpToDate)
+        {
+            if (enclaveIdentityStatus == parser::json::TcbStatus::Revoked)
             {
                 LOG_ERROR("Value of tcbStatus for the selected Enclave's Identity tcbLevel (isvSvn: {}) is \"Revoked\"",
                           enclaveReport.isvSvn);
@@ -103,8 +110,12 @@ Status EnclaveReportVerifier::verify(const EnclaveIdentityV2 *enclaveIdentity, c
             return STATUS_SGX_ENCLAVE_REPORT_ISVSVN_OUT_OF_DATE;
         }
     }
-    catch (const StatusNotSupportedException &e)
+    catch (const parser::json::StatusNotSupportedException &e)
     {
+        if (verificationCollateralInfo)
+        {
+            verificationCollateralInfo->setError();
+        }
         return STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED;
     }
 

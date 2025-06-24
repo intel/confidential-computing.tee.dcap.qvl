@@ -47,13 +47,16 @@ Status AttestationLibraryAdapter::verifyQuote(const std::vector<uint8_t>& quote,
                                               const std::string& pckCertChain,
                                               const std::string& pckCrl,
                                               const std::string& tcbInfo,
-                                              const std::string& qeIdentity) const
+                                              const std::string& qeIdentity,
+                                              std::vector<uint8_t>& verificationCollateralInfo) const
 {
     const auto qeIdentityRawPtr = qeIdentity.empty() ? nullptr : qeIdentity.c_str();
 #ifdef SGX_TRUSTED
-    return static_cast<Status>(enclave.verifyQuote(quote.data(), (uint32_t) quote.size(), pckCertChain.c_str(), pckCrl.c_str(), tcbInfo.c_str(), qeIdentityRawPtr));
+    return static_cast<Status>(enclave.verifyQuote(quote.data(), (uint32_t) quote.size(), pckCertChain.c_str(), pckCrl.c_str(), tcbInfo.c_str(), qeIdentityRawPtr,
+                                                   verificationCollateralInfo.data(), (uint32_t) verificationCollateralInfo.size()));
 #else
-    return ::sgxAttestationVerifyQuote(quote.data(), (uint32_t) quote.size(), pckCertChain.c_str(), pckCrl.c_str(), tcbInfo.c_str(), qeIdentityRawPtr);
+    return ::sgxAttestationVerifyQuoteEx(quote.data(), (uint32_t) quote.size(), pckCertChain.c_str(), pckCrl.c_str(), tcbInfo.c_str(), qeIdentityRawPtr,
+                                         verificationCollateralInfo.data(), (uint32_t) verificationCollateralInfo.size());
 #endif
 }
 

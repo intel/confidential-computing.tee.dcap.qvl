@@ -34,7 +34,6 @@
 
 #include "CommonVerifier.h"
 #include "TCBSigningChain.h"
-#include "EnclaveIdentityV2.h"
 #include <SgxEcdsaAttestation/QuoteVerification.h>
 #include <CertVerification/CertificateChain.h>
 #include <PckParser/CrlStore.h>
@@ -65,7 +64,7 @@ public:
      * @return Status code of the operation
      */
     Status verify(
-            const EnclaveIdentityV2 &enclaveIdentity,
+            const dcap::parser::json::EnclaveIdentity &enclaveIdentity,
             const CertificateChain &chain,
             const pckparser::CrlStore &rootCaCrl,
             const dcap::parser::x509::Certificate &trustedRoot,

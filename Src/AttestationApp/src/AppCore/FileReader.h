@@ -41,6 +41,7 @@ public:
 
     std::string readContent(const std::string& filePath) const override;
     std::vector<uint8_t> readBinaryContent(const std::string& filePath) const override;
+    void saveBinaryContent(const std::string& filePath, const std::vector<uint8_t> content) const override;
 };
 
 }}}

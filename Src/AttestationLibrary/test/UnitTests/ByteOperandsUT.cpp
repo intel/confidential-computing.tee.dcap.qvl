@@ -29,7 +29,7 @@
  *
  */
 
-#include <QuoteVerification/ByteOperands.h>
+#include "Utils/ByteOperands.h"
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>

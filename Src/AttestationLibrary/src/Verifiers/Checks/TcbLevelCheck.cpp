@@ -33,13 +33,17 @@
 #include "TDRelaunchCheck.h"
 #include "TdxModuleCheck.h"
 #include "CertVerification/X509Constants.h"
-#include "Verifiers/TcbStatus.h"
+#include "Utils/StatusUtils.h"
 #include "Utils/StatusPrinter.h"
 
 namespace intel::sgx::dcap {
 
 constexpr int CPUSVN_LOWER = false;
 constexpr int CPUSVN_EQUAL_OR_HIGHER = true;
+
+static const std::set<std::string> VALID_TCB_INFO_STATUSES =
+        {{ "UpToDate", "OutOfDate", "ConfigurationNeeded", "Revoked", "OutOfDateConfigurationNeeded",
+           "SWHardeningNeeded", "ConfigurationAndSWHardeningNeeded" }};
 
 bool isCpuSvnHigherOrEqual(const parser::x509::Tcb& tcb,
                            const TcbLevel& tcbLevel)
@@ -120,7 +124,7 @@ Status convergeTcbStatusWithQeTcbStatus(Status tcbLevelStatus, Status qeTcbStatu
         case STATUS_OK:
             return tcbLevelStatus;
         default:
-            /// 4.1.2.4.17.5
+            /// 4.1.2.5.18.5
             return STATUS_TCB_UNRECOGNIZED_STATUS;
     }
 }
@@ -136,10 +140,10 @@ matchTcbLevels(const std::set<TcbLevel, std::greater<TcbLevel>>& tcbLevels,
     Optional<TcbLevel> tdxTcbLevel;
     for (const auto& tcbLevel : tcbLevels)
     {
-        /// 4.1.2.4.17.1 & 4.1.2.4.17.2
+        /// 4.1.2.5.18.1 & 4.1.2.5.18.2
         if(isCpuSvnHigherOrEqual(tcb, tcbLevel) && tcb.getPceSvn() >= tcbLevel.getPceSvn())
         {
-            /// 4.1.2.4.17.3
+            /// 4.1.2.5.18.3
             if (teeTcbSvn.has_value())
             {
                 if (!sgxTcbLevel)
@@ -181,7 +185,8 @@ matchTcbLevels(const std::set<TcbLevel, std::greater<TcbLevel>>& tcbLevels,
 }
 
 Status checkTcbLevel(const TcbInfo &tcbInfo, const parser::x509::PckCertificate &pckCert, const Quote &quote,
-                     const Optional<Status> &qeTcbStatus, Optional<TdxModuleIdentity> &tdxModuleIdentity)
+                     const Optional<Status> &qeTcbStatus, Optional<TdxModuleIdentity> &tdxModuleIdentity,
+                     dcap::VerificationCollateralInfo& verificationCollateralInfo)
 {
     const auto isTdx = tcbInfo.getVersion() >= 3 &&
                        tcbInfo.getId() == parser::json::TcbInfo::TDX_ID &&
@@ -202,8 +207,12 @@ Status checkTcbLevel(const TcbInfo &tcbInfo, const parser::x509::PckCertificate 
     if (!sgxTcbLevel)
     {
         LOG_ERROR("SGX TCB Level has not been selected");
+        verificationCollateralInfo.setError();
         return STATUS_TCB_NOT_SUPPORTED;
     }
+
+    /// 4.1.2.5.19
+    verificationCollateralInfo.addTcbInfoData(tcbInfo, tcbLevels);
 
     const auto sgxTcbStatus = stringToTcbStatus(sgxTcbLevel->getStatus(), VALID_TCB_INFO_STATUSES);
     if (sgxTcbStatus == STATUS_TCB_REVOKED)
@@ -223,15 +232,16 @@ Status checkTcbLevel(const TcbInfo &tcbInfo, const parser::x509::PckCertificate 
     if (!tdxTcbLevel)
     {
         LOG_ERROR("TDX TCB Level has not been selected");
+        verificationCollateralInfo.setError();
         return STATUS_TCB_NOT_SUPPORTED;
     }
-
-    /// 4.1.2.4.17.4.1
-    const auto tdxModuleTcbStatus = checkTdxModuleTcbStatus(tcbInfo, quote, tdxModuleIdentity);
+    /// 4.1.2.5.18.4.1
+    const auto tdxModuleTcbStatus = checkTdxModuleTcbStatus(tcbInfo, quote, tdxModuleIdentity, verificationCollateralInfo);
     LOG_INFO("TDX Module - TCB Status: {}", printStatus(tdxModuleTcbStatus));
     if (tdxModuleTcbStatus == STATUS_TCB_NOT_SUPPORTED ||
         tdxModuleTcbStatus == STATUS_TDX_MODULE_MISMATCH)
     {
+        verificationCollateralInfo.setError();
         return tdxModuleTcbStatus;
     }
 
@@ -243,7 +253,7 @@ Status checkTcbLevel(const TcbInfo &tcbInfo, const parser::x509::PckCertificate 
         return tdxTcbStatus;
     }
 
-    /// 4.1.2.4.17.4.3
+    /// 4.1.2.5.18.4.3
     if (quote.getBody().bodyType == constants::BODY_TD_REPORT15_TYPE)
     {
         tdxTcbStatus = checkForRelaunch(quote.getTdReport15().teeTcbSvn2, tcbInfo,

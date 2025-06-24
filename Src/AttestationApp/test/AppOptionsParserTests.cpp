@@ -53,7 +53,7 @@ struct AppOptionsParserTests: public Test
     const std::string intermediateCaCrlDefaultPath = "intermediateCaCrl.der";
     const std::string qeIdentityDefaultPath = "qeIdentity.json";
 
-    const std::string helpOutput = "Usage: [-h] [--trustedRootCaCert=<string>] [--pckSignChain=<string>] [--pckCert=<string>] [--tcbSignChain=<string>] [--tcbInfo=<string>] [--qeIdentity=<string>] [--qveIdentity=<string>] [--rootCaCrl=<string>] [--intermediateCaCrl=<string>] [--quote=<string>] [--expirationDate=<string>]\n\n"
+    const std::string helpOutput = "Usage: [-h] [--trustedRootCaCert=<string>] [--pckSignChain=<string>] [--pckCert=<string>] [--tcbSignChain=<string>] [--tcbInfo=<string>] [--qeIdentity=<string>] [--qveIdentity=<string>] [--rootCaCrl=<string>] [--intermediateCaCrl=<string>] [--quote=<string>] [--verificationCollateralInfo=<string>] [--expirationDate=<string>]\n\n"
             "--trustedRootCaCert=<string>             Trusted root CA Certificate file path, PEM format [=trustedRootCaCert.pem]\n"
             "--pckSignChain=<string>                  PCK Signing Certificate chain file path, PEM format [=pckSignChain.pem]\n"
             "--pckCert=<string>                       PCK Certificate file path, PEM format [=pckCert.pem]\n"
@@ -64,6 +64,7 @@ struct AppOptionsParserTests: public Test
             "--rootCaCrl=<string>                     Root Ca CRL file path, PEM or DER format [=rootCaCrl.der]\n"
             "--intermediateCaCrl=<string>             Intermediate Ca CRL file path, PEM or DER format [=intermediateCaCrl.der]\n"
             "--quote=<string>                         Quote file path, binary format [=quote.dat]\n"
+            "--verificationCollateralInfo=<string>    Verification Collateral Info file path, binary format. VerificationCollateralInfo generation is optional, will not run by default [=]\n"
             "--expirationDate=<string>                Expiration date in timestamp seconds [=seconds]\n"
             "-h, --help                               Print this message\n";
 
@@ -94,6 +95,7 @@ TEST_F(AppOptionsParserTests, ReturnsDefaultValuesWhenNoArgumentsGivenPrintsNoth
     EXPECT_EQ(options->tcbInfoFile, tcbInfoDefaultPath);
     EXPECT_EQ(options->tcbSigningChainFile, tcbSignChainDefaultPath);
     EXPECT_EQ(options->quoteFile, quoteDefaultPath);
+    EXPECT_EQ(options->verCollInfoFile, "");
     EXPECT_TRUE(checkTimeWithHysteresis(options->expirationDate));
 }
 
@@ -147,6 +149,8 @@ TEST_F(AppOptionsParserTests, ReturnsGivenValuesWhenParametersPassedPrintsNothin
     const std::string tcbSignChainArg = "--tcbSignChain=" + tcbSignChain;
     const std::string quote = "quote123";
     const std::string quoteArg = "--quote=" + quote;
+    const std::string verCollInfo = "verCollInfo.dat";
+    const std::string verCollInfoArg = "--verificationCollateralInfo=" + verCollInfo;
     const std::string expirationDate = "9557826584";
     const std::string expirationDateArg = "--expirationDate=" + expirationDate;
 
@@ -159,6 +163,7 @@ TEST_F(AppOptionsParserTests, ReturnsGivenValuesWhenParametersPassedPrintsNothin
                                   tcbSignChainArg.c_str(),
                                   tcbInfoArg.c_str(),
                                   quoteArg.c_str(),
+                                  verCollInfoArg.c_str(),
                                   expirationDateArg.c_str()
                                  };
     std::ostringstream logger;
@@ -175,6 +180,7 @@ TEST_F(AppOptionsParserTests, ReturnsGivenValuesWhenParametersPassedPrintsNothin
     EXPECT_EQ(options->tcbInfoFile, tcbInfo);
     EXPECT_EQ(options->tcbSigningChainFile, tcbSignChain);
     EXPECT_EQ(options->quoteFile, quote);
+    EXPECT_EQ(options->verCollInfoFile, verCollInfo);
     EXPECT_EQ(options->expirationDate, std::stoll(expirationDate));
 }
 

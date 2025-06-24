@@ -41,7 +41,7 @@ class AttestationLibraryAdapterMock : public dcap::IAttestationLibraryAdapter
 {
 public:
     MOCK_CONST_METHOD0(getVersion, std::string());
-    MOCK_CONST_METHOD5(verifyQuote, Status(const std::vector<uint8_t>&, const std::string&, const std::string&, const std::string&, const std::string&));
+    MOCK_CONST_METHOD6(verifyQuote, Status(const std::vector<uint8_t>&, const std::string&, const std::string&, const std::string&, const std::string&, std::vector<uint8_t>&));
     MOCK_CONST_METHOD5(verifyPCKCertificate, Status(const std::string&, const std::string&, const std::string&, const std::string&, const time_t&));
     MOCK_CONST_METHOD5(verifyTCBInfo, Status(const std::string&, const std::string&, const std::string&, const std::string&,const time_t&));
     MOCK_CONST_METHOD5(verifyQeIdentity, Status(const std::string&, const std::string&, const std::string&, const std::string&, const time_t&));

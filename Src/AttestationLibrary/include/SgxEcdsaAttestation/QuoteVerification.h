@@ -210,6 +210,47 @@ typedef enum _status
 QVL_API Status sgxAttestationVerifyQuote(const uint8_t* quote, uint32_t quoteSize, const char *pemPckCertificate, const char* intermediateCrl, const char* tcbInfoJson, const char* qeIdentityJson);
 
 /**
+ * This function is an extended version of the Verify ECDSA Quote function. It provides caller with additional information based on the provided Verification Collateral (TCB Info, QE Identity).
+ *
+ * @param quote - Buffer with serialized quote structure.
+ * @param quoteSize - Size of quote buffer. Function heavily relies on this input as internal buffer is allocated based on it without boundaries check! It's user responsibility to provide proper validation.
+ * @param pemPckCertificate - Null terminated Intel SGX PCK certificate in PEM format.
+ * @param intermediateCrl - Null terminated, PEM or DER(hex encoded) formatted x.509 Intel SGX PCK Processor/Platform CRL
+ * @param tcbInfoJson - TCB Info structure in JSON format signed by Intel SGX TCB Signing Certificate.
+ * @param qeIdentityJson - QE Identity structure in JSON format signed by Intel SGX TCB Signing Certificate.
+ * @param verificationCollateralInfo - Buffer with serialized Verification Collateral Info Structure filled during function execution
+ * @param verificationCollateralInfoSize - Size of verificationCollateralInfo buffer. Function heavily relies on this input as internal buffer is allocated based on it without boundaries check! It's user responsibility to provide proper validation.
+ * @return Status code of the operation, one of:
+ *      - STATUS_OK
+ *      - STATUS_INVALID_PARAMETER
+ *      - STATUS_MISSING_PARAMETERS
+ *      - STATUS_UNSUPPORTED_QUOTE_FORMAT
+ *      - STATUS_UNSUPPORTED_PCK_CERT_FORMAT
+ *      - STATUS_INVALID_PCK_CERT
+ *      - STATUS_UNSUPPORTED_PCK_RL_FORMAT
+ *      - STATUS_INVALID_PCK_RL
+ *      - STATUS_PCK_REVOKED
+ *      - STATUS_UNSUPPORTED_TCB_INFO_FORMAT
+ *      - STATUS_TCB_INFO_MISMATCH
+ *      - STATUS_TCB_OUT_OF_DATE
+ *      - STATUS_TCB_REVOKED
+ *      - STATUS_TCB_CONFIGURATION_NEEDED
+ *      - STATUS_TCB_OUT_OF_DATE_CONFIGURATION_NEEDED
+ *      - STATUS_TCB_SW_HARDENING_NEEDED
+ *      - STATUS_TCB_CONFIGURATION_AND_SW_HARDENING_NEEDED
+ *      - STATUS_TCB_NOT_SUPPORTED
+ *      - STATUS_TCB_UNRECOGNIZED_STATUS
+ *      - STATUS_TCB_TD_RELAUNCH_ADVISED
+ *      - STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED
+ *      - STATUS_INVALID_QE_REPORT_SIGNATURE
+ *      - STATUS_INVALID_QE_REPORT_DATA
+ *      - STATUS_UNSUPPORTED_QE_IDENTITY_FORMAT
+ *      - STATUS_QE_IDENTITY_MISMATCH
+ *      - STATUS_INVALID_QUOTE_SIGNATURE
+ */
+QVL_API Status sgxAttestationVerifyQuoteEx(const uint8_t* quote, uint32_t quoteSize, const char *pemPckCertificate, const char* intermediateCrl, const char* tcbInfoJson, const char* qeIdentityJson, uint8_t* verificationCollateralInfo, uint32_t verificationCollateralInfoSize);
+
+/**
  *
  * @param enclaveReport - Buffer with serialized Enclave Report  structure.
  * @param enclaveIdentity - Enclave Identity structure in JSON format.

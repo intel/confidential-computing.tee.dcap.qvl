@@ -134,10 +134,13 @@ TEST_P(QuoteVerifierTcbStatusUT, checkStatuses)
 {
     Optional<TdxModuleIdentity> tdxModuleIdentity; // ignore, it is not important in the current implementation
     const Params &params = GetParam();
+    VerificationCollateralInfo verCollInfo;
+
     const auto result = checkTcbLevel(params.tcbInfo,
                                       params.certificate,
                                       params.quote,
                                       params.qeTcbStatus,
-                                      tdxModuleIdentity);
+                                      tdxModuleIdentity,
+                                      verCollInfo);
     EXPECT_EQ(printStatus(result), printStatus(params.result));
 }

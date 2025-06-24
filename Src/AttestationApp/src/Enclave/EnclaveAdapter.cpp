@@ -86,10 +86,10 @@ std::string EnclaveAdapter::getVersion() const
 
 
 int EnclaveAdapter::verifyQuote(const uint8_t* rawQuote, uint32_t quoteSize, const char *pemPckCertificate, const char* pckCrl,
-                                   const char* tcbInfoJson, const char* qeIdentityJson) const
+                                   const char* tcbInfoJson, const char* qeIdentityJson, uint8_t* verificationCollateralInfo, uint32_t verificationCollateralInfoSize) const
 {
     int status;
-    sgx_status_t ret = sgxAttestationVerifyQuote(eid, &status, rawQuote, quoteSize, pemPckCertificate, pckCrl, tcbInfoJson, qeIdentityJson);
+    sgx_status_t ret = sgxAttestationVerifyQuoteEx(eid, &status, rawQuote, quoteSize, pemPckCertificate, pckCrl, tcbInfoJson, qeIdentityJson, verificationCollateralInfo, verificationCollateralInfoSize);
     if (ret != SGX_SUCCESS)
     {
         throw std::runtime_error("Failed verifyQuote ecall to enclave: " + std::to_string(ret));
