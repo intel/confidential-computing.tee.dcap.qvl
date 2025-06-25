@@ -117,10 +117,10 @@ struct EnclaveReportVerifierUT : public Test
     {
         ASSERT_EQ(1, verificationCollateralInfo.getId());
         ASSERT_EQ(1, verificationCollateralInfo.getVersion());
-        ASSERT_EQ((std::vector<time_t>){getEpochTimeFromString(model.issueDate)}, verificationCollateralInfo.getIssueDates());
-        ASSERT_EQ((std::vector<time_t>){getEpochTimeFromString(model.nextUpdate)}, verificationCollateralInfo.getNextUpdates());
-        ASSERT_EQ((std::vector<unsigned int>){model.tcbEvaluationDataNumber}, verificationCollateralInfo.getTcbEvalNumbers());
-        ASSERT_EQ((std::vector<time_t>){getEpochTimeFromString(tcbDate)}, verificationCollateralInfo.getTcbDates());
+        ASSERT_EQ(std::vector<time_t>{getEpochTimeFromString(model.issueDate)}, verificationCollateralInfo.getIssueDates());
+        ASSERT_EQ(std::vector<time_t>{getEpochTimeFromString(model.nextUpdate)}, verificationCollateralInfo.getNextUpdates());
+        ASSERT_EQ(std::vector<unsigned int>{model.tcbEvaluationDataNumber}, verificationCollateralInfo.getTcbEvalNumbers());
+        ASSERT_EQ(std::vector<time_t>{getEpochTimeFromString(tcbDate)}, verificationCollateralInfo.getTcbDates());
         ASSERT_EQ(advisoryIds, verificationCollateralInfo.getAdvisoryIds());
     }
 
