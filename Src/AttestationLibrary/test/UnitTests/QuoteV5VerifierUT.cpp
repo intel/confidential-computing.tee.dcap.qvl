@@ -213,9 +213,9 @@ struct QuoteV5VerifierUT: public testing::Test
     {
         ASSERT_EQ(1, verificationCollateralInfo.getId());
         ASSERT_EQ(1, verificationCollateralInfo.getVersion());
-        ASSERT_EQ((std::vector<time_t>){tcbInfoJson.getIssueDate()}, verificationCollateralInfo.getIssueDates());
-        ASSERT_EQ((std::vector<time_t>){tcbInfoJson.getNextUpdate()}, verificationCollateralInfo.getNextUpdates());
-        ASSERT_EQ((std::vector<unsigned int>){tcbInfoJson.getTcbEvaluationDataNumber()}, verificationCollateralInfo.getTcbEvalNumbers());
+        ASSERT_EQ(std::vector<time_t>{tcbInfoJson.getIssueDate()}, verificationCollateralInfo.getIssueDates());
+        ASSERT_EQ(std::vector<time_t>{tcbInfoJson.getNextUpdate()}, verificationCollateralInfo.getNextUpdates());
+        ASSERT_EQ(std::vector<unsigned int>{tcbInfoJson.getTcbEvaluationDataNumber()}, verificationCollateralInfo.getTcbEvalNumbers());
         ASSERT_EQ(tcbDates, verificationCollateralInfo.getTcbDates());
         ASSERT_EQ(advisoryIds, verificationCollateralInfo.getAdvisoryIds());
     }
