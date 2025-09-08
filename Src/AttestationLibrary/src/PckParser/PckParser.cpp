@@ -167,7 +167,7 @@ Signature getSignature(const ASN1_BIT_STRING* psig)
     if(!sig)
     {
         return Signature{
-            rawDerSequence,
+            std::move(rawDerSequence),
             {},
             {}
         };

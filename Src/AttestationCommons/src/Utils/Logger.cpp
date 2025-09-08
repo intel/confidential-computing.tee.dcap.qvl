@@ -97,7 +97,7 @@ void init(const std::string& name, const std::string &consoleLogLevel, const std
         spdlog::flush_every(std::chrono::seconds(1));
 
         spdlog::register_logger(loggerInstance);
-        spdlog::set_default_logger(loggerInstance);
+        spdlog::set_default_logger(std::move(loggerInstance));
         LOG_INFO("QVL Logging enabled and configured");
     }
 #endif

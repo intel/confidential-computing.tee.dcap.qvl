@@ -55,8 +55,16 @@ int main(int argc, char* argv[])
     }
 
 #ifdef SGX_LOGS
-    sgxAttestationLoggerSetup("AttestationApp", "TRACE", "TRACE", "qvl.log",
-                              "");
+    try
+    {
+        sgxAttestationLoggerSetup("AttestationApp", "TRACE", "TRACE", "qvl.log",
+                                  "");
+    }
+    catch (std::exception& e)
+    {
+        std::cout << "Failed to setup logging: " << e.what() << std::endl;
+        return -1;
+    }
 #endif
     std::cout << "Running QVL version: " << app.version() << std::endl;
     bool result = app.runVerification(*options, logger);

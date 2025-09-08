@@ -72,8 +72,8 @@ Status QuoteVerifier::verify(const Quote& quote,
         return STATUS_INVALID_PCK_CRL;
     }
 
-    const auto crlIssuerRaw = crl.getIssuer().raw;
-    const auto pckCertIssuerRaw = pckCert.getIssuer().getRaw();
+    const auto& crlIssuerRaw = crl.getIssuer().raw;
+    const auto& pckCertIssuerRaw = pckCert.getIssuer().getRaw();
     if(crlIssuerRaw != pckCertIssuerRaw)
     {
         LOG_ERROR("Issuers in PCK revocation List and PCK Certificate are not the same. RL: {}, Cert: {}",

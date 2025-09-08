@@ -48,7 +48,7 @@ public:
         uint16_t version = 3;
         uint16_t attestationKeyType;
         uint16_t teeType;
-        uint16_t reserved;
+        uint16_t reserved = 0;
         uint16_t qeSvn;
         uint16_t pceSvn;
         std::array<uint8_t, 16> qeVendorId;

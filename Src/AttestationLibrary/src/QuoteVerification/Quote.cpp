@@ -104,7 +104,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
                 }
                 if (!copyAndAdvance(localTdReport15, from, TD_REPORT15_BYTE_LEN, rawQuote.end()))
                 {
-                    LOG_ERROR("Can't read TDX TD Report 1.5 from quote. Expected size: {}", TD_REPORT10_BYTE_LEN);
+                    LOG_ERROR("Can't read TDX TD Report 1.5 from quote. Expected size: {}", TD_REPORT15_BYTE_LEN);
                     return false;
                 }
                 signedData = getDataToSignatureVerification(rawQuote, HEADER_BYTE_LEN + BODY_BYTE_SIZE + TD_REPORT15_BYTE_LEN);
@@ -171,7 +171,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
             return false;
         }
         
-        const auto reportBytes = localQuoteV4Auth.certificationData.data;
+        const auto& reportBytes = localQuoteV4Auth.certificationData.data;
         auto beg = reportBytes.cbegin();
         QEReportCertificationData qeReportData;
         if (!qeReportData.insert(beg, reportBytes.cend()))

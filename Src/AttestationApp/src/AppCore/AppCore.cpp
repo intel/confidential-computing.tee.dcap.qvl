@@ -133,7 +133,7 @@ bool AppCore::runVerification(const AppOptions& options, std::ostream& logger) c
         const bool isVerCollInfoFilled = verCollInfo != std::vector<uint8_t>(VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN);
         if (!options.verCollInfoFile.empty() && isVerCollInfoFilled)
         {
-            fileReader->saveBinaryContent(options.verCollInfoFile, verCollInfo);
+            fileReader->saveBinaryContent(options.verCollInfoFile, std::move(verCollInfo));
         }
 
         outputResult("Quote", quoteVerifyStatus, logger);
