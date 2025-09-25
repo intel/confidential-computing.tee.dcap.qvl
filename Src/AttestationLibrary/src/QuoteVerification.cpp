@@ -61,6 +61,7 @@ static constexpr size_t EXPECTED_CERTIFICATE_COUNT_IN_PCK_CHAIN = 3;
 static constexpr size_t EXPECTED_CERTIFICATE_COUNT_IN_TCB_CHAIN = 2;
 
 using namespace intel::sgx;
+using namespace intel::sgx::dcap::parser::json;
 
 const char* sgxAttestationGetVersion()
 {
@@ -293,9 +294,9 @@ Status sgxAttestationVerifyEnclaveIdentity(const char *enclaveIdentityString, co
         return STATUS_UNSUPPORTED_CERT_FORMAT;
     }
 
-    std::unique_ptr<dcap::parser::json::EnclaveIdentity> enclaveIdentity;
+    std::unique_ptr<EnclaveIdentity> enclaveIdentity;
     try {
-        enclaveIdentity = std::make_unique<parser::json::EnclaveIdentity>(parser::json::EnclaveIdentity::parse(enclaveIdentityString));
+        enclaveIdentity = std::unique_ptr<EnclaveIdentity>(new EnclaveIdentity(EnclaveIdentity::parse(enclaveIdentityString)));
     }
     catch (const dcap::parser::FormatException& ex)
     {
@@ -418,7 +419,7 @@ Status sgxAttestationVerifyQuoteEx(const uint8_t* rawQuote, uint32_t quoteSize, 
     if (qeIdentityJson != nullptr)
     {
         try {
-            enclaveIdentity = std::make_unique<parser::json::EnclaveIdentity>(parser::json::EnclaveIdentity::parse(qeIdentityJson));
+            enclaveIdentity = std::unique_ptr<EnclaveIdentity>(new EnclaveIdentity(EnclaveIdentity::parse(qeIdentityJson)));
         }
         catch (const dcap::parser::FormatException& ex)
         {
@@ -498,10 +499,10 @@ Status sgxAttestationVerifyEnclaveReport(const uint8_t* enclaveReport, const cha
     }
 
     /// 4.1.2.9.2
-    std::unique_ptr<parser::json::EnclaveIdentity> enclaveIdentityParsed;
+    std::unique_ptr<EnclaveIdentity> enclaveIdentityParsed;
     try
     {
-        enclaveIdentityParsed = std::make_unique<parser::json::EnclaveIdentity>(parser::json::EnclaveIdentity::parse(enclaveIdentity));
+        enclaveIdentityParsed = std::unique_ptr<EnclaveIdentity>(new EnclaveIdentity(EnclaveIdentity::parse(enclaveIdentity)));
     }
     catch (const dcap::parser::FormatException& ex)
     {
