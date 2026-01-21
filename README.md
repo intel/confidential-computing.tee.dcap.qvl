@@ -32,7 +32,7 @@ Requirements:
 
 * CMake version 3.18 or higher (CMake 4.0 cannot build GTest for unit tests due to dropped support for CMake 3.5)
 * make
-* clang++ with c++11 support (version 5.0.2 or higher is recommended)
+* clang++ with c++17 support (version 5.0.2 or higher is recommended)
 * doxygen version 1.8.14 if BUILD_DOCS is enabled
 * gcc to compile dependant openssl (version 9.4.0 or higher is recommended, because it requires libstdc++ in version 6)
 * bash shell
