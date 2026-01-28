@@ -254,9 +254,13 @@ Status checkTcbLevel(const TcbInfo &tcbInfo, const parser::x509::PckCertificate 
     }
 
     /// 4.1.2.5.18.4.3
-    if (quote.getBody().bodyType == constants::BODY_TD_REPORT15_TYPE)
+    if (quote.getBody().bodyType == constants::BODY_TD_REPORT15_TYPE ||
+        quote.getBody().bodyType == constants::BODY_TD_REPORT15EX_TYPE)
     {
-        tdxTcbStatus = checkForRelaunch(quote.getTdReport15().teeTcbSvn2, tcbInfo,
+        auto &teeTcbSvn2 = quote.getBody().bodyType == constants::BODY_TD_REPORT15_TYPE ? 
+                                        quote.getTdReport15().teeTcbSvn2 :
+                                        quote.getTdReport15Ex().teeTcbSvn2;
+        tdxTcbStatus = checkForRelaunch(teeTcbSvn2, tcbInfo,
                                         sgxTcbStatus, tdxTcbStatus, tdxModuleTcbStatus, qeTcbStatus);
     }
 

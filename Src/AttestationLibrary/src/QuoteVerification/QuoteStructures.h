@@ -111,6 +111,23 @@ struct TDReport15 : public TDReport10
     std::array<uint8_t, constants::TD_REPORT15_BYTE_LEN> rawBlob() const;
 };
 
+struct TDReport15Ex : public TDReport15
+{
+    std::array<uint8_t, 1> vmid;
+    std::array<uint8_t, 32> tdId;
+    std::array<uint8_t, 48> devInfo {};
+    std::array<uint8_t, 48> initServTdHash {};
+    std::array<uint8_t, 8> initServTdAttributes {};
+    std::array<uint8_t, 16> initCpuSvn {};
+    std::array<uint8_t, 16> initTeeTcbSvn {};
+    std::array<uint8_t, 12> initTeeFmspc {};
+    std::array<uint8_t, 48> curServTdHash {};
+    std::array<uint8_t, 8> curServTdAttributes {};
+
+    bool insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end);
+    std::array<uint8_t, constants::TD_REPORT15EX_BYTE_LEN> rawBlob() const;
+};
+
 struct Ecdsa256BitSignature
 {
     std::array<uint8_t, dcap::constants::ECDSA_P256_SIGNATURE_BYTE_LEN> signature;

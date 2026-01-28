@@ -208,6 +208,12 @@ QuoteV5Generator& QuoteV5Generator::withTDReport15(const TDReport15& _body)
     return *this;
 }
 
+QuoteV5Generator& QuoteV5Generator::withTDReport15Ex(const TDReport15Ex& _body)
+{
+    this->tdReport15Ex = _body;
+    return *this;
+}
+
 QuoteV5Generator& QuoteV5Generator::withQuoteSignature(const EcdsaSignature& signature)
 {
     quoteAuthData.ecdsaSignature = signature;
@@ -259,6 +265,11 @@ Bytes QuoteV5Generator::buildTdx10Quote()
 Bytes QuoteV5Generator::buildTdx15Quote()
 {
     return header.bytes() + body.bytes() + tdReport15.bytes() + quoteAuthData.bytes();
+}
+
+Bytes QuoteV5Generator::buildTdx15ExQuote()
+{
+    return header.bytes() + body.bytes() + tdReport15Ex.bytes() + quoteAuthData.bytes();
 }
 
 Bytes QuoteV5Generator::QuoteHeader::bytes() const
@@ -321,6 +332,21 @@ Bytes QuoteV5Generator::TDReport15::bytes() const {
             TDReport10::bytes() +
             convertToBytes(teeTcbSvn2) +
             convertToBytes(mrServiceTd);
+}
+
+Bytes QuoteV5Generator::TDReport15Ex::bytes() const {
+    return
+            TDReport15::bytes() +
+            convertToBytes(vmid) +
+            convertToBytes(tdId) +
+            convertToBytes(devInfo) +
+            convertToBytes(initServTdHash) +
+            convertToBytes(initServTdAttributes) +
+            convertToBytes(initCpuSvn) +
+            convertToBytes(initTeeTcbSvn) +
+            convertToBytes(initTeeFmspc) +
+            convertToBytes(curServTdHash) +
+            convertToBytes(curServTdAttributes);            ;
 }
 
 Bytes QuoteV5Generator::QuoteAuthData::bytes() const

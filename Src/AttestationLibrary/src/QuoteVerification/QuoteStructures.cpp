@@ -190,6 +190,37 @@ std::array<uint8_t,TD_REPORT15_BYTE_LEN> TDReport15::rawBlob() const
     return ret;
 }
 
+bool TDReport15Ex::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+{
+    if (!TDReport15::insert(from, end)) return false;
+    if (!copyAndAdvance(vmid, from, end)) { return false; }
+    if (!copyAndAdvance(tdId, from, end)) { return false; }
+    return true;
+}
+
+std::array<uint8_t,TD_REPORT15EX_BYTE_LEN> TDReport15Ex::rawBlob() const
+{
+    const auto& ret15 = TDReport15::rawBlob();
+
+    std::array<uint8_t, TD_REPORT15EX_BYTE_LEN> ret{};
+    std::copy(ret15.begin(), ret15.end(), ret.begin());
+    auto to = ret.begin();
+
+    std::advance(to, TD_REPORT15_BYTE_LEN);
+
+    std::copy(vmid.begin(), vmid.end(), to);
+    std::advance(to, (unsigned) vmid.size());
+
+    std::copy(tdId.begin(), tdId.end(), to);
+    std::advance(to, (unsigned) tdId.size());
+
+    // Unimplemented fields are, for now, set to 0
+    std::advance(to, TD_REPORT15EX_BYTE_LEN);
+
+    return ret;
+}
+
+
 bool Ecdsa256BitSignature::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
 {
     return copyAndAdvance(signature, from, end);

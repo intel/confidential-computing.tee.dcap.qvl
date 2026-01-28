@@ -49,6 +49,7 @@ public:
     const EnclaveReport& getEnclaveReport() const;
     const TDReport10& getTdReport10() const;
     const TDReport15& getTdReport15() const;
+    const TDReport15Ex& getTdReport15Ex() const;
     uint32_t getAuthDataSize() const;
 
     // Access helpers
@@ -73,6 +74,7 @@ protected:
     EnclaveReport enclaveReport{};
     TDReport10 tdReport10{};
     TDReport15 tdReport15{};
+    TDReport15Ex tdReport15Ex{};
     uint32_t authDataSize;
     std::vector<uint8_t> signedData{};
 
