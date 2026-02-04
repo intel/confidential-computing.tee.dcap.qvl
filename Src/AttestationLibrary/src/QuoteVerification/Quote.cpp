@@ -141,7 +141,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
         return false;
     }
     const auto remainingDistance = std::distance(from, rawQuote.end());
-    if(localAuthDataSize > remainingDistance)
+    if(static_cast<std::ptrdiff_t>(localAuthDataSize) > remainingDistance)
     {
         LOG_ERROR("Declared auth data size {} is bigger than remaining buffer size {}", localAuthDataSize, remainingDistance);
         return false;

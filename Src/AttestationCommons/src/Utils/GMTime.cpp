@@ -38,18 +38,13 @@
 
 #include "time.h"
 #include "errno.h"
+#include <cstdint>
 
 #define FALSE	0
 #define TRUE	1
 
-#ifdef _MSC_VER
-#include <stdint.h>
-typedef int32_t	    int_fast32_t;
-typedef int64_t     int_fast64_t;
-#else
-typedef __int32_t	int_fast32_t;
-typedef __int64_t   int_fast64_t;
-#endif
+using int_fast32_t = std::int_fast32_t;
+using int_fast64_t = std::int_fast64_t;
 
 static struct tm    tmGlobal;
 

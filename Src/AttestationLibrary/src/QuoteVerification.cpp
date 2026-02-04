@@ -374,7 +374,7 @@ Status sgxAttestationVerifyQuoteEx(const uint8_t* rawQuote, uint32_t quoteSize, 
    
     // We totally trust user on this, it should be explicitly and clearly
     // mentioned in doc, is there any max quote len other than numeric_limit<uint32_t>::max() ?
-    const std::vector<uint8_t> vecQuote(rawQuote, std::next(rawQuote, quoteSize));
+    const std::vector<uint8_t> vecQuote(rawQuote, std::next(rawQuote, static_cast<std::ptrdiff_t>(quoteSize)));
 
     /// 4.1.2.5.2
     if (verificationCollateralInfo && verificationCollateralInfoSize < ::constants::VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN)
@@ -537,7 +537,7 @@ Status sgxAttestationGetQECertificationDataSize(
 
     // We totally trust user on this, it should be explicitly and clearly
     // mentioned in doc, is there any max quote len other than numeric_limit<uint32_t>::max() ?
-    const std::vector<uint8_t> vecQuote(rawQuote, std::next(rawQuote, quoteSize));
+    const std::vector<uint8_t> vecQuote(rawQuote, std::next(rawQuote, static_cast<std::ptrdiff_t>(quoteSize)));
 
     dcap::Quote quote;
     if(!quote.parse(vecQuote) || !quote.validate())
@@ -568,7 +568,7 @@ Status sgxAttestationGetQECertificationData(
 
     // We totally trust user on this, it should be explicitly and clearly
     // mentioned in doc, is there any max quote len other than numeric_limit<uint32_t>::max() ?
-    const std::vector<uint8_t> vecQuote(rawQuote, std::next(rawQuote, quoteSize));
+    const std::vector<uint8_t> vecQuote(rawQuote, std::next(rawQuote, static_cast<std::ptrdiff_t>(quoteSize)));
 
     dcap::Quote quote;
 
