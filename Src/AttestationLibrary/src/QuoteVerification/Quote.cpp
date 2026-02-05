@@ -118,7 +118,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
                 }
                 if (!copyAndAdvance(localTdReport15Ex, from, TD_REPORT15EX_BYTE_LEN, rawQuote.end()))
                 {
-                    LOG_ERROR("Can't read TDX TD Report 1.5 from quote. Expected size: {}", TD_REPORT15_BYTE_LEN);
+                    LOG_ERROR("Can't read TDX TD Report 1.5 Ex from quote. Expected size: {}", TD_REPORT15EX_BYTE_LEN);
                     return false;
                 }
                 signedData = getDataToSignatureVerification(rawQuote, HEADER_BYTE_LEN + BODY_BYTE_SIZE + TD_REPORT15EX_BYTE_LEN);

@@ -346,7 +346,7 @@ Bytes QuoteV5Generator::TDReport15Ex::bytes() const {
             convertToBytes(initTeeTcbSvn) +
             convertToBytes(initTeeFmspc) +
             convertToBytes(curServTdHash) +
-            convertToBytes(curServTdAttributes);            ;
+            convertToBytes(curServTdAttributes);
 }
 
 Bytes QuoteV5Generator::QuoteAuthData::bytes() const

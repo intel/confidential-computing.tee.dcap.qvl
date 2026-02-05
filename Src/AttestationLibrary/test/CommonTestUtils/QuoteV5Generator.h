@@ -189,7 +189,7 @@ public:
     EnclaveReport& getEnclaveReport() {return enclaveReport;}
     TDReport10& getTdReport10() {return tdReport10;}
     TDReport15& getTdReport15() {return tdReport15;}
-    TDReport15& getTdReport15Ex() {return tdReport15;}
+    TDReport15Ex& getTdReport15Ex() {return tdReport15Ex;}
     uint32_t& getAuthSize() {return quoteAuthData.authDataSize;}
     QuoteAuthData& getAuthData() {return quoteAuthData;}
 
