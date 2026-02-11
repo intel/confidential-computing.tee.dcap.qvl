@@ -60,6 +60,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
     EnclaveReport localEnclaveReport{};
     TDReport10 localTdReport10{};
     TDReport15 localTdReport15{};
+    TDReport15Ex localTdReport15Ex{};
 
     if (localHeader.version > constants::QUOTE_VERSION_4)
     {
@@ -108,6 +109,19 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
                     return false;
                 }
                 signedData = getDataToSignatureVerification(rawQuote, HEADER_BYTE_LEN + BODY_BYTE_SIZE + TD_REPORT15_BYTE_LEN);
+                break;
+            case BODY_TD_REPORT15EX_TYPE: // TD Report for TDX 1.5
+                if (localBody.size != TD_REPORT15EX_BYTE_LEN)
+                {
+                    LOG_ERROR("Unexpected TDX TD Report 1.5 Ex size. Expected size: {}", TD_REPORT15EX_BYTE_LEN);
+                    return false;
+                }
+                if (!copyAndAdvance(localTdReport15Ex, from, TD_REPORT15EX_BYTE_LEN, rawQuote.end()))
+                {
+                    LOG_ERROR("Can't read TDX TD Report 1.5 Ex from quote. Expected size: {}", TD_REPORT15EX_BYTE_LEN);
+                    return false;
+                }
+                signedData = getDataToSignatureVerification(rawQuote, HEADER_BYTE_LEN + BODY_BYTE_SIZE + TD_REPORT15EX_BYTE_LEN);
                 break;
             default: // Unknown body type
                 return false;
@@ -190,6 +204,7 @@ bool Quote::parse(const std::vector<uint8_t>& rawQuote)
     enclaveReport = localEnclaveReport;
     tdReport10 = localTdReport10;
     tdReport15 = localTdReport15;
+    tdReport15Ex = localTdReport15Ex;
     authDataSize = localAuthDataSize;
     authDataV3 = std::move(localQuoteV3Auth);
     authDataV4 = std::move(localQuoteV4Auth);
@@ -302,6 +317,11 @@ const TDReport15& Quote::getTdReport15() const
     return tdReport15;
 }
 
+const TDReport15Ex& Quote::getTdReport15Ex() const
+{
+    return tdReport15Ex;
+}
+
 uint32_t Quote::getAuthDataSize() const
 {
     return authDataSize;
@@ -352,13 +372,14 @@ const std::array<uint8_t, 16> &Quote::getTeeTcbSvn() const {
     }
     else // Quote V5 and higher
     {
-        if (body.bodyType == dcap::constants::BODY_TD_REPORT10_TYPE)
-        {
-            return tdReport10.teeTcbSvn;
-        }
-        else
-        {
-            return tdReport15.teeTcbSvn;
+        switch (body.bodyType) {
+            case dcap::constants::BODY_TD_REPORT10_TYPE:
+                return tdReport10.teeTcbSvn;
+            case dcap::constants::BODY_TD_REPORT15_TYPE:
+                return tdReport15.teeTcbSvn;
+            case dcap::constants::BODY_TD_REPORT15EX_TYPE:
+            default:
+                return tdReport15Ex.teeTcbSvn;
         }
     }
 }
@@ -371,13 +392,14 @@ const std::array<uint8_t, 48>& Quote::getMrSignerSeam() const
     }
     else // Quote V5 and higher
     {
-        if (body.bodyType == dcap::constants::BODY_TD_REPORT10_TYPE)
-        {
-            return tdReport10.mrSignerSeam;
-        }
-        else
-        {
-            return tdReport15.mrSignerSeam;
+        switch (body.bodyType) {
+            case dcap::constants::BODY_TD_REPORT10_TYPE:
+                return tdReport10.mrSignerSeam;
+            case dcap::constants::BODY_TD_REPORT15_TYPE:
+                return tdReport15.mrSignerSeam;
+            case dcap::constants::BODY_TD_REPORT15EX_TYPE:
+            default:
+                return tdReport15Ex.mrSignerSeam;
         }
     }
 }
@@ -390,13 +412,14 @@ const std::array<uint8_t, 8>& Quote::getSeamAttributes() const
     }
     else // Quote V5 and higher
     {
-        if (body.bodyType == dcap::constants::BODY_TD_REPORT10_TYPE)
-        {
-            return tdReport10.seamAttributes;
-        }
-        else
-        {
-            return tdReport15.seamAttributes;
+        switch (body.bodyType) {
+            case dcap::constants::BODY_TD_REPORT10_TYPE:
+                return tdReport10.seamAttributes;
+            case dcap::constants::BODY_TD_REPORT15_TYPE:
+                return tdReport15.seamAttributes;
+            case dcap::constants::BODY_TD_REPORT15EX_TYPE:
+            default:
+                return tdReport15Ex.seamAttributes;
         }
     }
 }

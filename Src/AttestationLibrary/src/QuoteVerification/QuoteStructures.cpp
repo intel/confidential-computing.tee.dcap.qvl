@@ -190,6 +190,67 @@ std::array<uint8_t,TD_REPORT15_BYTE_LEN> TDReport15::rawBlob() const
     return ret;
 }
 
+bool TDReport15Ex::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
+{
+    if (!TDReport15::insert(from, end)) return false;
+    if (!copyAndAdvance(vmid, from, end)) { return false; }
+    if (!copyAndAdvance(tdId, from, end)) { return false; }
+    if (!copyAndAdvance(devInfo, from, end)) { return false; }
+    if (!copyAndAdvance(initServTdHash, from, end)) { return false; }
+    if (!copyAndAdvance(initServTdAttributes, from, end)) { return false; }
+    if (!copyAndAdvance(initCpuSvn, from, end)) { return false; }
+    if (!copyAndAdvance(initTeeTcbSvn, from, end)) { return false; }
+    if (!copyAndAdvance(initTeeFmspc, from, end)) { return false; }
+    if (!copyAndAdvance(curServTdHash, from, end)) { return false; }
+    if (!copyAndAdvance(curServTdAttributes, from, end)) { return false; }
+
+    return true;
+}
+
+std::array<uint8_t,TD_REPORT15EX_BYTE_LEN> TDReport15Ex::rawBlob() const
+{
+    const auto& ret15 = TDReport15::rawBlob();
+
+    std::array<uint8_t, TD_REPORT15EX_BYTE_LEN> ret{};
+    std::copy(ret15.begin(), ret15.end(), ret.begin());
+    auto to = ret.begin();
+
+    std::advance(to, TD_REPORT15_BYTE_LEN);
+
+    std::copy(vmid.begin(), vmid.end(), to);
+    std::advance(to, (unsigned) vmid.size());
+
+    std::copy(tdId.begin(), tdId.end(), to);
+    std::advance(to, (unsigned) tdId.size());
+
+    std::copy(devInfo.begin(), devInfo.end(), to);
+    std::advance(to, (unsigned) devInfo.size());
+
+    std::copy(initServTdHash.begin(), initServTdHash.end(), to);
+    std::advance(to, (unsigned) initServTdHash.size());
+
+    std::copy(initServTdAttributes.begin(), initServTdAttributes.end(), to);
+    std::advance(to, (unsigned) initServTdAttributes.size());
+
+    std::copy(initCpuSvn.begin(), initCpuSvn.end(), to);
+    std::advance(to, (unsigned) initCpuSvn.size());
+
+    std::copy(initTeeTcbSvn.begin(), initTeeTcbSvn.end(), to);
+    std::advance(to, (unsigned) initTeeTcbSvn.size());
+
+    std::copy(initTeeFmspc.begin(), initTeeFmspc.end(), to);
+    std::advance(to, (unsigned) initTeeFmspc.size());
+
+    std::copy(curServTdHash.begin(), curServTdHash.end(), to);
+    std::advance(to, (unsigned) curServTdHash.size());
+
+    std::copy(curServTdAttributes.begin(), curServTdAttributes.end(), to);
+    std::advance(to, (unsigned) curServTdAttributes.size());
+
+    return ret;
+}
+
+
 bool Ecdsa256BitSignature::insert(std::vector<uint8_t>::const_iterator& from, const std::vector<uint8_t>::const_iterator& end)
 {
     return copyAndAdvance(signature, from, end);

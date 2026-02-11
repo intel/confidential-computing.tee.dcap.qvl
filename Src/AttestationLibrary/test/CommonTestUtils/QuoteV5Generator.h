@@ -107,6 +107,21 @@ public:
         Bytes bytes() const;
     };
 
+    struct TDReport15Ex : public TDReport15 {
+        std::array<uint8_t, 1> vmid;
+        std::array<uint8_t, 32> tdId;
+        std::array<uint8_t, 48> devInfo {};
+        std::array<uint8_t, 48> initServTdHash {};
+        std::array<uint8_t, 8> initServTdAttributes {};
+        std::array<uint8_t, 16> initCpuSvn {};
+        std::array<uint8_t, 16> initTeeTcbSvn {};
+        std::array<uint8_t, 12> initTeeFmspc {};
+        std::array<uint8_t, 48> curServTdHash {};
+        std::array<uint8_t, 8> curServTdAttributes {};
+
+        Bytes bytes() const;
+    };
+
     struct EcdsaSignature
     {
         std::array<uint8_t, 64> signature;
@@ -165,6 +180,7 @@ public:
     QuoteV5Generator& withEnclaveReport(const EnclaveReport& _body);
     QuoteV5Generator& withTDReport10(const TDReport10& _body);
     QuoteV5Generator& withTDReport15(const TDReport15& _body);
+    QuoteV5Generator& withTDReport15Ex(const TDReport15Ex& _body);
     QuoteV5Generator& withAuthDataSize(uint32_t size);
     QuoteV5Generator& withAuthData(const QuoteAuthData& authData);
 
@@ -173,6 +189,7 @@ public:
     EnclaveReport& getEnclaveReport() {return enclaveReport;}
     TDReport10& getTdReport10() {return tdReport10;}
     TDReport15& getTdReport15() {return tdReport15;}
+    TDReport15Ex& getTdReport15Ex() {return tdReport15Ex;}
     uint32_t& getAuthSize() {return quoteAuthData.authDataSize;}
     QuoteAuthData& getAuthData() {return quoteAuthData;}
 
@@ -185,6 +202,7 @@ public:
     Bytes buildSgxQuote();
     Bytes buildTdx10Quote();
     Bytes buildTdx15Quote();
+    Bytes buildTdx15ExQuote();
 
 private:
     QuoteHeader header;
@@ -192,6 +210,7 @@ private:
     EnclaveReport enclaveReport;
     TDReport10 tdReport10;
     TDReport15 tdReport15;
+    TDReport15Ex tdReport15Ex;
     QuoteAuthData quoteAuthData;
 };
 

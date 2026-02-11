@@ -359,6 +359,28 @@ TEST_F(QuoteV5ParsingUT, shouldParseAndValidateQuoteTDX15Header)
     EXPECT_TRUE(testHeader == quoteObj.getHeader());
 }
 
+TEST_F(QuoteV5ParsingUT, shouldParseAndValidateQuoteTDX15ExHeader)
+{
+    dcap::test::QuoteV5Generator::QuoteHeader testHeader;
+    testHeader.attestationKeyType = dcap::constants::ECDSA_256_WITH_P256_CURVE;
+    testHeader.reserved = 0;
+    testHeader.qeVendorId = dcap::constants::INTEL_QE_VENDOR_ID;
+    testHeader.teeType = dcap::constants::TEE_TYPE_TDX;
+    testHeader.userData = {};
+
+    gen.withHeader(testHeader);
+    gen.withBody({ dcap::constants::BODY_TD_REPORT15EX_TYPE,
+                   dcap::constants::TD_REPORT15EX_BYTE_LEN });
+    const auto quote = gen.buildTdx15Quote();
+
+    dcap::Quote quoteObj;
+
+    ASSERT_TRUE(quoteObj.parse(quote));
+    ASSERT_TRUE(quoteObj.validate());
+
+    EXPECT_TRUE(testHeader == quoteObj.getHeader());
+}
+
 TEST_F(QuoteV5ParsingUT, shouldNotValdiateQuoteWithUnsupportedVersion)
 {
     dcap::test::QuoteV5Generator::QuoteHeader testHeader;
@@ -411,6 +433,16 @@ TEST_F(QuoteV5ParsingUT, shouldNotParseTdx10QuoteWithInvalidBodySize)
 TEST_F(QuoteV5ParsingUT, shouldNotParseTdx15QuoteWithInvalidBodySize)
 {
     gen.withBody({ dcap::constants::BODY_TD_REPORT15_TYPE, 0});
+    const auto quote = gen.buildSgxQuote();
+
+    dcap::Quote quoteObj;
+
+    ASSERT_FALSE(quoteObj.parse(quote));
+}
+
+TEST_F(QuoteV5ParsingUT, shouldNotParseTdx15ExQuoteWithInvalidBodySize)
+{
+    gen.withBody({ dcap::constants::BODY_TD_REPORT15EX_TYPE, 0});
     const auto quote = gen.buildSgxQuote();
 
     dcap::Quote quoteObj;
