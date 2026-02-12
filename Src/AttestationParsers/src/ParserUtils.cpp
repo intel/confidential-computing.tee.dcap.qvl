@@ -194,8 +194,17 @@ std::time_t asn1TimeToTimet(
     int pday;
     int psec;
     auto from = crypto::make_unique(ASN1_TIME_new());
+    if (!from)
+    {
+        auto err = getLastError();
+        LOG_AND_THROW(FormatException, err);
+    }
     time_t resultTime = 0;
-    ASN1_TIME_set(from.get(), resultTime);
+    if (!ASN1_TIME_set(from.get(), resultTime))
+    {
+        auto err = getLastError();
+        LOG_AND_THROW(FormatException, err);
+    }
     if(1 != ASN1_TIME_diff(&pday, &psec, from.get(), asn1Time))
     {
         // We're here if the format is invalid, thus

@@ -67,10 +67,13 @@ std::vector<uint8_t> rawEcdsaSignatureToDER(const std::array<uint8_t,constants::
     BN_bin2bn(sig.data() + 32, 32, bnS.get());
 
     auto ecdsaSig = crypto::make_unique(ECDSA_SIG_new());
-    if(1 != ECDSA_SIG_set0(ecdsaSig.get(), bnR.release(), bnS.release()))
+    if(1 != ECDSA_SIG_set0(ecdsaSig.get(), bnR.get(), bnS.get()))
     {
         return {};
     }
+
+    bnR.release();
+    bnS.release();
 
     const auto expectedSize = i2d_ECDSA_SIG(ecdsaSig.get(), nullptr);
     if(0 >= expectedSize)
