@@ -3,6 +3,7 @@ Version/include
 Build
 cmake-build-debug
 cmake-build-release
+compile_commands.json
 .vscode
 x64
 Debug

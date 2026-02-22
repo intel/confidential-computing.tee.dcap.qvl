@@ -1,4 +1,4 @@
-# Copyright (c) 2017, Intel Corporation
+# Copyright (c) 2017 - 2026, Intel Corporation
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -26,6 +26,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 set(CMAKE_POLICY_DEFAULT_CMP0144 NEW)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(ATTESTATION_PARSERS_ROOT_DIR "") # Optional path to Attestation Parsers library
 set(ATTESTATION_LIBRARY_ROOT_DIR "") # Optional path to Attestation library
