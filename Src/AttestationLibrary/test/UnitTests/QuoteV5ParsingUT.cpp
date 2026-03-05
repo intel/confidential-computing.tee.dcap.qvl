@@ -371,7 +371,7 @@ TEST_F(QuoteV5ParsingUT, shouldParseAndValidateQuoteTDX15ExHeader)
     gen.withHeader(testHeader);
     gen.withBody({ dcap::constants::BODY_TD_REPORT15EX_TYPE,
                    dcap::constants::TD_REPORT15EX_BYTE_LEN });
-    const auto quote = gen.buildTdx15Quote();
+    const auto quote = gen.buildTdx15ExQuote();
 
     dcap::Quote quoteObj;
 
