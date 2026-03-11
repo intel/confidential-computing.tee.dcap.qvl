@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+ * Copyright (C) 2011-2026 Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -67,13 +67,14 @@ std::vector<uint8_t> rawEcdsaSignatureToDER(const std::array<uint8_t,constants::
     BN_bin2bn(sig.data() + 32, 32, bnS.get());
 
     auto ecdsaSig = crypto::make_unique(ECDSA_SIG_new());
-    if(1 != ECDSA_SIG_set0(ecdsaSig.get(), bnR.get(), bnS.get()))
+    BIGNUM* r = bnR.release();
+    BIGNUM* s = bnS.release();
+    if(1 != ECDSA_SIG_set0(ecdsaSig.get(), r, s))
     {
+        BN_free(r);
+        BN_free(s);
         return {};
     }
-
-    bnR.release();
-    bnS.release();
 
     const auto expectedSize = i2d_ECDSA_SIG(ecdsaSig.get(), nullptr);
     if(0 >= expectedSize)
