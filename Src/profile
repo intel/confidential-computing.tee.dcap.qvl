@@ -41,9 +41,10 @@ cmake ../ -DBUILD_ATTESTATION_APP=$BUILD_ATTESTATION_APP \
              -DCMAKE_C_COMPILER=clang \
              -DCMAKE_CXX_COMPILER=clang++ \
              -DSANITIZE_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+             -DSANITIZER_FLAGS_DEBUG_CLANG="-fsanitize=undefined,implicit-conversion,nullability" \
              -DCMAKE_BUILD_TYPE=$type \
              "$@" \
-             && make && make install && ctest || exit 1
+             && make -j6 && make install && ctest --output-on-failure || exit 1
 popd
 pushd Build/$type/dist/bin/sampleData
 LD_LIBRARY_PATH=../../lib ../AttestationApp || exit 1

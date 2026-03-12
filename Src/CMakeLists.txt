@@ -187,7 +187,9 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU
 				)
         # implicit-conversion: Checks for suspicious behavior of implicit conversions. Enables implicit-unsigned-integer-truncation, implicit-signed-integer-truncation, and implicit-integer-sign-change.
 		# nullability: Enables nullability-arg, nullability-assign, and nullability-return. While violating nullability does not have undefined behavior, it is often unintentional, so UBSan offers to catch it.
-		set(SANITIZER_FLAGS_DEBUG_CLANG "-fsanitize=undefined,safe-stack,implicit-conversion,nullability")
+		if(NOT DEFINED SANITIZER_FLAGS_DEBUG_CLANG)
+            set(SANITIZER_FLAGS_DEBUG_CLANG "-fsanitize=undefined,safe-stack,implicit-conversion,nullability")
+        endif()
 		if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "7.0")
 			list(APPEND CMAKE_CXX_FLAGS_CLANG "-fcf-protection")
 		endif()
@@ -271,7 +273,10 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU
 
 	set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${COMMON_LINKER_FLAGS}" "-pie")
 	set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${COMMON_LINKER_FLAGS}")
-	set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${COMMON_LINKER_FLAGS}" "-pie" "${SANITIZER_FLAGS_DEBUG_CLANG}" "${SANITIZER_FLAGS_DEBUG_GCC}")
+	set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${COMMON_LINKER_FLAGS}" "${SANITIZER_FLAGS_DEBUG_CLANG}" "${SANITIZER_FLAGS_DEBUG_GCC}")
+	if(NOT DEFINED SANITIZE_FLAGS)
+	    list(APPEND CMAKE_EXE_LINKER_FLAGS_DEBUG "-pie")
+    endif()
 	set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "${COMMON_LINKER_FLAGS}" "${SANITIZER_FLAGS_DEBUG_CLANG}" "${SANITIZER_FLAGS_DEBUG_GCC}")
 
 	#Convert colon-separated CMake lists back to space-separated values that clang likes
