@@ -38,7 +38,7 @@ if [[ -d cmake-build-debug ]]; then
 fi
 
 if [[ -d cmake-build-release ]]; then
-  pushd cmake-build-debug &&
+  pushd cmake-build-release &&
   make clean
   popd
 fi

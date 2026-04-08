@@ -40,6 +40,6 @@ cmake ../ -DBUILD_DOCS=$BUILD_DOCS \
           -DCMAKE_BUILD_TYPE=Release \
           -G "Unix Makefiles" \
           "$@" \
-          && make && make install &&
+          && cmake --build . --parallel && cmake --install . &&
 
 popd
