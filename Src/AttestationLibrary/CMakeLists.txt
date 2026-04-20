@@ -176,7 +176,7 @@ if (BUILD_ENCLAVE)
             "-Wl,--whole-archive -l${TRTS_LIBRARY_NAME} -lsgx_tsgxssl -Wl,--no-whole-archive"
             "-Wl,--start-group -lsgx_pthread -lsgx_tstdc -lsgx_tcxx -lsgx_tsgxssl_crypto -l${TSERVICE_LIBRARY_NAME} -Wl,--end-group"
             "-Wl,-Bstatic -Wl,-Bsymbolic"
-            "-Wl,-pie,-eenclave_entry -Wl,--export-dynamic"
+            "-Wl,-eenclave_entry -Wl,--export-dynamic"
             "-Wl,--defsym,__ImageBase=0"
             "${LDSCRIPT_FLAG}"
             )
