@@ -9,3 +9,4 @@ Debug
 Release
 packages
 .vs
+*.o
