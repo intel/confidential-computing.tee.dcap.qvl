@@ -84,7 +84,7 @@ if (BUILD_ENCLAVE)
             "-Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L${SGX_OPENSSL}/lib64 -L${SGX_SDK}/lib64"
             "-Wl,--start-group -lsgx_tstdc -lsgx_tcxx -lsgx_tcrypto -lsgx_tsgxssl_crypto -Wl,--end-group"
             "-Wl,-Bstatic -Wl,-Bsymbolic"
-            "-Wl,-pie,-eenclave_entry -Wl,--export-dynamic"
+            "-Wl,-eenclave_entry -Wl,--export-dynamic"
             "-Wl,--defsym,__ImageBase=0"
             )
 
