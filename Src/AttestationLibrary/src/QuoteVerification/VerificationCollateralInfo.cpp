@@ -30,7 +30,7 @@
  */
 
 #include <tuple>
-#include <algorithm>
+#include <algorithm> // std::min_element, max_element for windows
 #include <cstring>
 #include "QuoteConstants.h"
 #include "VerificationCollateralInfo.h"
@@ -38,49 +38,59 @@
 
 using namespace intel::sgx::dcap;
 
-VerificationCollateralInfo::VerificationCollateralInfo() : _id(1), _version(1), _isError(false) {}
+std::string advisoryIdsToString(const std::set<std::string>& advisoryIds)
+{
+    std::string advisoryIdsStr;
+    for (const auto& advisoryId : advisoryIds) {
+        advisoryIdsStr += advisoryId + ",";
+    }
+    if (!advisoryIdsStr.empty()) {
+        advisoryIdsStr.pop_back(); // Remove the last comma
+    }
 
-void VerificationCollateralInfo::addTcbInfoData(const parser::json::TcbInfo& tcbInfo, std::tuple<Optional<parser::json::TcbLevel>, Optional<parser::json::TcbLevel>>& matchedTcbLevels)
+    if (advisoryIdsStr.size() >= constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN)
+    {
+        throw VerCollInfoSizeException("AdvisoryIDs string exceeds the maximum allowed size of " + std::to_string(constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN) +
+            " bytes. Current size: " + std::to_string(advisoryIdsStr.size()));
+    }
+    return advisoryIdsStr;
+}
+
+VerificationCollateralInfo::VerificationCollateralInfo() : _id(1), _version(2), _isFilled(false) {}
+
+void VerificationCollateralInfo::addLaunchInfo(const std::time_t& tcbDate, const std::vector<std::string>& advisoryIds, const std::string& tcbStatus)
+{
+    _launchTcbDate = tcbDate;
+    _launchAdvisoryIds.insert(advisoryIds.begin(), advisoryIds.end());
+    _launchTcbStatus = tcbStatus;
+}
+
+void VerificationCollateralInfo::addCurrentInfo(const std::time_t& tcbDate, const std::vector<std::string>& advisoryIds, const std::string& tcbStatus)
+{
+    _currentTcbDate = tcbDate;
+    _currentAdvisoryIds.insert(advisoryIds.begin(), advisoryIds.end());
+    _currentTcbStatus = tcbStatus;
+}
+
+void VerificationCollateralInfo::addTcbInfoData(const parser::json::TcbInfo& tcbInfo)
 {
     _issueDates.push_back(tcbInfo.getIssueDate());
     _nextUpdates.push_back(tcbInfo.getNextUpdate());
     _tcbEvalNumbers.push_back(tcbInfo.getTcbEvaluationDataNumber());
-
-    const auto sgxTcbLevel = std::get<0>(matchedTcbLevels);
-    const auto tdxTcbLevel = std::get<1>(matchedTcbLevels);
-
-    if(tdxTcbLevel.has_value())
-    {
-        _tcbDates.push_back(tdxTcbLevel->getTcbDate());
-        _advisoryIds.insert(tdxTcbLevel->getAdvisoryIDs().begin(), tdxTcbLevel->getAdvisoryIDs().end());
-    }
-    else
-    {
-        _tcbDates.push_back(sgxTcbLevel->getTcbDate());
-        _advisoryIds.insert(sgxTcbLevel->getAdvisoryIDs().begin(), sgxTcbLevel->getAdvisoryIDs().end());
-    }
 }
 
-void VerificationCollateralInfo::addEnclaveIdentityData(const parser::json::EnclaveIdentity& enclaveIdentity, const parser::json::IdentityTcbLevel& matchedTcbLevel)
+void VerificationCollateralInfo::addEnclaveIdentityData(const parser::json::EnclaveIdentity& enclaveIdentity)
 {
     _issueDates.push_back(enclaveIdentity.getIssueDate());
     _nextUpdates.push_back(enclaveIdentity.getNextUpdate());
     _tcbEvalNumbers.push_back(enclaveIdentity.getTcbEvaluationDataNumber());
-    _tcbDates.push_back(matchedTcbLevel.getTcbDate());
-    _advisoryIds.insert(matchedTcbLevel.getAdvisoryIds().begin(), matchedTcbLevel.getAdvisoryIds().end());
-}
-
-void VerificationCollateralInfo::addTdxModuleData(const parser::json::TdxModuleTcbLevel& matchedTdxModuleTcbLevel)
-{
-    _tcbDates.push_back(matchedTdxModuleTcbLevel.getTcbDate());
-    _advisoryIds.insert(matchedTdxModuleTcbLevel.getAdvisoryIDs().begin(), matchedTdxModuleTcbLevel.getAdvisoryIDs().end());
 }
 
 std::vector<uint8_t> VerificationCollateralInfo::aggregateDataAndParseToVec() {
     std::vector<uint8_t> byteVec(constants::VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN, 0);
     size_t offset = 0;
 
-    if(_issueDates.empty() || _nextUpdates.empty() || _tcbEvalNumbers.empty() || _tcbDates.empty())
+    if(_issueDates.empty() || _nextUpdates.empty() || _tcbEvalNumbers.empty())
     {
         return byteVec;
     }
@@ -89,7 +99,6 @@ std::vector<uint8_t> VerificationCollateralInfo::aggregateDataAndParseToVec() {
     const auto issueDateMax = *std::max_element(_issueDates.begin(), _issueDates.end());
     const auto expirationDate = *std::min_element(_nextUpdates.begin(), _nextUpdates.end());
     const auto tcbEvaluationDataNumber = *std::min_element(_tcbEvalNumbers.begin(), _tcbEvalNumbers.end());
-    const auto tcbDate = *std::min_element(_tcbDates.begin(), _tcbDates.end());
 
     std::memcpy(&byteVec[offset], &_id, constants::VERIFICATION_COLLATERAL_INFO_ID_SIZE_BYTE_LEN);
     offset+=constants::VERIFICATION_COLLATERAL_INFO_ID_SIZE_BYTE_LEN;
@@ -109,31 +118,49 @@ std::vector<uint8_t> VerificationCollateralInfo::aggregateDataAndParseToVec() {
     std::memcpy(&byteVec[offset], &tcbEvaluationDataNumber, constants::VERIFICATION_COLLATERAL_INFO_TCB_EVALUATION_DATA_NUMBER_SIZE_BYTE_LEN);
     offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_EVALUATION_DATA_NUMBER_SIZE_BYTE_LEN;
 
-    std::memcpy(&byteVec[offset], &tcbDate, constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN);
+    std::memcpy(&byteVec[offset], &_launchTcbDate, constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN);
     offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN;
 
-    std::string advisoryIdsStr;
-    for (const auto& advisoryId : _advisoryIds) {
-        advisoryIdsStr += advisoryId + ",";
-    }
-    if (!advisoryIdsStr.empty()) {
-        advisoryIdsStr.pop_back(); // Remove the last comma
-    }
+    std::memcpy(&byteVec[offset], &_currentTcbDate, constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN);
+    offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN;
 
-    size_t advisoryIdsBufferSize = advisoryIdsStr.size();
-    if (advisoryIdsStr.size() >= constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN)
+    auto advisoryIdsStr = advisoryIdsToString(_launchAdvisoryIds);
+    std::memcpy(&byteVec[offset], advisoryIdsStr.c_str(), advisoryIdsStr.size());
+    offset+=constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN;
+
+    advisoryIdsStr = advisoryIdsToString(_currentAdvisoryIds);
+    std::memcpy(&byteVec[offset], advisoryIdsStr.c_str(), advisoryIdsStr.size());
+    offset+=constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN;
+
+    if (_launchTcbStatus.size() >= constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN)
     {
-        throw VerCollInfoSizeException("AdvisoryIDs string exceeds the maximum allowed size of 450 bytes. Current size: " + std::to_string(advisoryIdsStr.size()));
+        throw VerCollInfoSizeException("Launch TCB Status string exceeds the maximum allowed size of " + std::to_string(constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN) +
+            " bytes. Current size: " + std::to_string(_launchTcbStatus.size()));
     }
-    std::memcpy(&byteVec[offset], advisoryIdsStr.c_str(), advisoryIdsBufferSize);
+    std::memcpy(&byteVec[offset], _launchTcbStatus.c_str(), _launchTcbStatus.size());
+    offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN;
+
+    if (_currentTcbStatus.size() >= constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN)
+    {
+        throw VerCollInfoSizeException("Current TCB Status string exceeds the maximum allowed size of " + std::to_string(constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN) +
+            " bytes. Current size: " + std::to_string(_currentTcbStatus.size()));
+    }
+    std::memcpy(&byteVec[offset], _currentTcbStatus.c_str(), _currentTcbStatus.size());
+    offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN;
+
+    if (offset != byteVec.size())
+    {
+        throw VerCollInfoSizeException("Aggregated data size does not match the expected size. Expected: " + std::to_string(byteVec.size()) +
+            " bytes. Actual: " + std::to_string(offset) + " bytes.");
+    }
 
     return byteVec;
 }
 
-bool VerificationCollateralInfo::isError() const {
-    return _isError;
+bool VerificationCollateralInfo::isFilled() const {
+    return _isFilled;
 }
 
-void VerificationCollateralInfo::setError() {
-    this->_isError = true;
+void VerificationCollateralInfo::setFilled() {
+    this->_isFilled = true;
 }

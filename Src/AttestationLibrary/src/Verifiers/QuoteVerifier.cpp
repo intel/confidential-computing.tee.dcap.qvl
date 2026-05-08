@@ -30,8 +30,8 @@
  */
 
 #include "QuoteVerifier.h"
-#include "Checks/TcbLevelCheck.h" // checkTcbLevel
 #include "Checks/TdxModuleCheck.h" // findTdxModuleIdentity
+#include "Checks/TDRelaunchCheck.h" // checkForRelaunch
 #include "Utils/RuntimeException.h"
 #include "Utils/Logger.h"
 #include "Utils/StatusPrinter.h"
@@ -45,6 +45,8 @@
 #include <OpensslHelpers/SignatureVerification.h>
 #include <Verifiers/PckCertVerifier.h>
 
+#include "Checks/TcbLevelCheck.h"
+
 using namespace intel::sgx::dcap::parser::json;
 
 namespace intel::sgx::dcap {
@@ -57,8 +59,6 @@ Status QuoteVerifier::verify(const Quote& quote,
                              const EnclaveReportVerifier& enclaveReportVerifier,
                              VerificationCollateralInfo& verificationCollateralInfo)
 {
-    Optional<Status> qeIdentityStatus;
-
     /// 4.1.2.5.5
     if (!_baseVerififer.commonNameContains(pckCert.getSubject(), constants::SGX_PCK_CN_PHRASE)) {
         LOG_ERROR("PCK Certificate. CN in Subject field does not contain \"SGX PCK Certificate\" phrase");
@@ -279,7 +279,7 @@ Status QuoteVerifier::verify(const Quote& quote,
         }
 
         /// 4.1.2.5.16
-        qeIdentityStatus = enclaveReportVerifier.verify(enclaveIdentity, quote.getQeReport(), &verificationCollateralInfo);
+        const Optional<Status> qeIdentityStatus = enclaveReportVerifier.verify(enclaveIdentity, quote.getQeReport());
         LOG_INFO("QE Identity - Status: {}", printStatus(qeIdentityStatus.value()));
         switch(qeIdentityStatus.value()) {
             case STATUS_SGX_ENCLAVE_REPORT_UNSUPPORTED_FORMAT:
@@ -293,9 +293,11 @@ Status QuoteVerifier::verify(const Quote& quote,
             case STATUS_SGX_ENCLAVE_REPORT_MRSIGNER_MISMATCH:
             case STATUS_SGX_ENCLAVE_REPORT_ISVPRODID_MISMATCH:
                 return STATUS_QE_IDENTITY_MISMATCH;
+            case STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED:
             case STATUS_SGX_ENCLAVE_REPORT_ISVSVN_OUT_OF_DATE:
             case STATUS_SGX_ENCLAVE_REPORT_ISVSVN_REVOKED:
             default:
+                verificationCollateralInfo.addEnclaveIdentityData(*enclaveIdentity);
                 break;
         }
     }
@@ -303,7 +305,6 @@ Status QuoteVerifier::verify(const Quote& quote,
     const auto attestKey = crypto::rawToP256PubKey(quote.getAttestKeyData());
     if(!attestKey)
     {
-        verificationCollateralInfo.setError();
         return STATUS_UNSUPPORTED_QUOTE_FORMAT;
     }
 
@@ -315,18 +316,15 @@ Status QuoteVerifier::verify(const Quote& quote,
         LOG_ERROR("Quote Signature ({}) cannot be verified with ECDSA Attestation Key ({})",
                   bytesToHexString(std::vector<uint8_t>(begin(quote.getQuoteSignature()), end(quote.getQuoteSignature()))),
                   bytesToHexString(std::vector<uint8_t>(begin(quote.getAttestKeyData()), end(quote.getAttestKeyData()))));
-        verificationCollateralInfo.setError();
         return STATUS_INVALID_QUOTE_SIGNATURE;
     }
 
     try
     {
-        /// 4.1.2.5.18
-        return checkTcbLevel(tcbInfo, pckCert, quote, qeIdentityStatus, tdxModuleIdentity, verificationCollateralInfo);
+        return checkTcbLevel(tcbInfo, pckCert, quote, enclaveIdentity, verificationCollateralInfo);
     }
     catch (const RuntimeException &ex)
     {
-        verificationCollateralInfo.setError();
         return ex.getStatus();
     }
 }

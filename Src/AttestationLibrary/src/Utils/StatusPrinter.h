@@ -39,6 +39,7 @@ namespace intel::sgx::dcap {
 
 std::string printStatus(Status s);
 std::string printStatusOnly(Status s);
+std::string printTCBStatus(Status s);
 }
 
 #endif //SGXECDSAATTESTATION_STATUSPRINTER_H

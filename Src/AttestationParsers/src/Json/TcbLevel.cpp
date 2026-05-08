@@ -46,12 +46,18 @@ static constexpr size_t SGX_TCB_SVN_COMP_COUNT = 16;
 // Deprecated as a part of TcbInfo version 2 structure. Please use the newest TcbLevel constructor instead.
 TcbLevel::TcbLevel(const std::vector<uint8_t>& cpuSvnComponents,
                    uint32_t pceSvn,
-                   const std::string& status): _version(TcbInfo::Version::V2),
-                                               _cpuSvnComponents(cpuSvnComponents),
+                   const std::string& status,
+                   const std::time_t& tcbDate): _version(TcbInfo::Version::V2),
+                                               _cpuSvn(cpuSvnComponents),
                                                _pceSvn(pceSvn),
                                                _status(status),
-                                               _tcbDate(0)
-{}
+                                               _tcbDate(tcbDate)
+{
+    for (uint32_t i = 0; i < cpuSvnComponents.size(); i++)
+    {
+        _cpuSvnComponents.push_back(TcbComponent(cpuSvnComponents[i]));
+    }
+}
 
 // Deprecated as a part of TcbInfo version 2 structure. Please use the newest TcbLevel constructor instead.
 TcbLevel::TcbLevel(const std::vector<uint8_t>& cpuSvnComponents,
@@ -59,12 +65,17 @@ TcbLevel::TcbLevel(const std::vector<uint8_t>& cpuSvnComponents,
                    const std::string& status,
                    const  std::time_t tcbDate,
                    std::vector<std::string> advisoryIDs): _version(TcbInfo::Version::V2),
-                                                          _cpuSvnComponents(cpuSvnComponents),
+                                                          _cpuSvn(cpuSvnComponents),
                                                           _pceSvn(pceSvn),
                                                           _status(status),
                                                           _tcbDate(tcbDate),
                                                           _advisoryIDs(std::move(advisoryIDs))
-{}
+{
+    for (unsigned char cpuSvnComponent : cpuSvnComponents)
+    {
+        _cpuSvnComponents.emplace_back(cpuSvnComponent);
+    }
+}
 
 TcbLevel::TcbLevel(const std::string& id,
                    const std::vector<TcbComponent>& sgxTcbComponents,
@@ -74,6 +85,7 @@ TcbLevel::TcbLevel(const std::string& id,
                    const  std::time_t tcbDate,
                    std::vector<std::string> advisoryIDs): _id(id),
                                               _version(TcbInfo::Version::V3),
+                                              _cpuSvnComponents(sgxTcbComponents),
                                               _sgxTcbComponents(sgxTcbComponents),
                                               _tdxTcbComponents(tdxTcbComponents),
                                               _pceSvn(pceSvn),
@@ -83,13 +95,13 @@ TcbLevel::TcbLevel(const std::string& id,
 {
     for (uint32_t i = 0; i < sgxTcbComponents.size(); i++)
     {
-        _cpuSvnComponents.push_back(sgxTcbComponents[i].getSvn());
+        _cpuSvn.push_back(sgxTcbComponents[i].getSvn());
     }
 }
 
 bool TcbLevel::operator>(const TcbLevel& other) const
 {
-    if(_cpuSvnComponents == other._cpuSvnComponents)
+    if(_cpuSvn == other._cpuSvn)
     {
         if (_version == TcbInfo::Version::V3 && _id == TcbInfo::TDX_ID && _pceSvn == other._pceSvn)
         {
@@ -97,7 +109,7 @@ bool TcbLevel::operator>(const TcbLevel& other) const
         }
         return _pceSvn > other._pceSvn;
     }
-    return _cpuSvnComponents > other._cpuSvnComponents;
+    return _cpuSvn > other._cpuSvn;
 }
 
 // Deprecated as a part of TcbInfo version 2 structure. Please use getSgxTcbComponent instead.
@@ -109,7 +121,7 @@ uint32_t TcbLevel::getSgxTcbComponentSvn(uint32_t componentNumber) const
                           "]. Should be less than " + std::to_string(constants::CPUSVN_BYTE_LEN);
         LOG_AND_THROW(FormatException, err);
     }
-    return _cpuSvnComponents[componentNumber];
+    return _cpuSvn[componentNumber];
 }
 
 const TcbComponent& TcbLevel::getSgxTcbComponent(uint32_t componentNumber) const
@@ -125,10 +137,15 @@ const TcbComponent& TcbLevel::getSgxTcbComponent(uint32_t componentNumber) const
 
 const std::vector<TcbComponent>& TcbLevel::getSgxTcbComponents() const
 {
-    if (_version < TcbInfo::Version::V3)
+    if (_version < TcbInfo::Version::V2)
     {
-        LOG_AND_THROW(FormatException, "SGX TCB Components is not a valid field in TCB Info V1 and V2 structure");
+        LOG_AND_THROW(FormatException, "SGX TCB Components is not a valid field in TCB Info V1 structure");
     }
+    if (_version == TcbInfo::Version::V2)
+    {
+        return _cpuSvnComponents;
+    }
+
     return _sgxTcbComponents;
 }
 
@@ -167,7 +184,7 @@ const std::vector<TcbComponent>& TcbLevel::getTdxTcbComponents() const
 // Deprecated as a part of TcbInfo version 3 structure. Please use getSgxTcbComponents with getSvn instead
 const std::vector<uint8_t>& TcbLevel::getCpuSvn() const
 {
-    return _cpuSvnComponents;
+    return _cpuSvn;
 }
 
 uint32_t TcbLevel::getPceSvn() const
@@ -337,11 +354,13 @@ void TcbLevel::setTcbComponents(const rapidjson::Value &tcb) {
     }
     _sgxTcbComponents.reserve(SGX_TCB_SVN_COMP_COUNT);
     _cpuSvnComponents.reserve(SGX_TCB_SVN_COMP_COUNT);
+    _cpuSvn.reserve(SGX_TCB_SVN_COMP_COUNT);
     for (auto itr = sgxComponentsArray.Begin(); itr != sgxComponentsArray.End(); ++itr) {
         auto component = TcbComponent(*itr);
         _sgxTcbComponents.push_back(component);
         // backward compatibility
-        _cpuSvnComponents.push_back(component.getSvn());
+        _cpuSvn.push_back(component.getSvn());
+        _cpuSvnComponents.push_back(std::move(component));
     }
 
     if(_id == TcbInfo::TDX_ID)
@@ -396,6 +415,7 @@ void TcbLevel::setCpuSvn(const ::rapidjson::Value& tcb, JsonParser& jsonParser)
         LOG_AND_THROW(FormatException, "[tcb] field of TCB level should be a JSON object");
     }
 
+    _cpuSvn.reserve(SGX_TCB_SVN_COMP_COUNT);
     _cpuSvnComponents.reserve(SGX_TCB_SVN_COMP_COUNT);
     for(const auto &componentName : sgxTcbSvnComponentsNames)
     {
@@ -412,7 +432,8 @@ void TcbLevel::setCpuSvn(const ::rapidjson::Value& tcb, JsonParser& jsonParser)
             case JsonParser::ParseStatus::OK:
                 break;
         }
-        _cpuSvnComponents.push_back(static_cast<uint8_t>(componentValue));
+        _cpuSvn.push_back(static_cast<uint8_t>(componentValue));
+        _cpuSvnComponents.emplace_back(static_cast<uint8_t>(componentValue));
     }
 }
 

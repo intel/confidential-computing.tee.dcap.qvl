@@ -45,6 +45,7 @@ set(QVL_COMMON_TEST_UTILS_DIR ${CMAKE_SOURCE_DIR}/AttestationLibrary/test/Common
 set(PARSERS_COMMON_TEST_UTILS_DIR ${CMAKE_SOURCE_DIR}/AttestationParsers/test/CommonTestUtils)
 
 file(GLOB SOURCE_FILES *.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Mocks/*.cpp
     ${QVL_COMMON_TEST_UTILS_DIR}/*.cpp
     ${PARSERS_COMMON_TEST_UTILS_DIR}/*.cpp
 )

@@ -47,8 +47,7 @@ class EnclaveReportVerifier {
 public:
     virtual ~EnclaveReportVerifier() = default;
     virtual Status verify(const parser::json::EnclaveIdentity *enclaveIdentity,
-                          const EnclaveReport& enclaveReport,
-                          VerificationCollateralInfo *verificationCollateralInfo = nullptr) const;
+                          const EnclaveReport& enclaveReport) const;
 
 private:
     uint32_t vectorToUint32(const std::vector<uint8_t>& input) const;

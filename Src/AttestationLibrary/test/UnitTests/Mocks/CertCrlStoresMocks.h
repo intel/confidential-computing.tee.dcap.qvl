@@ -111,8 +111,10 @@ class TcbMock: public dcap::parser::x509::Tcb
 public:
     MOCK_CONST_METHOD0(getPceSvn, uint32_t());
     MOCK_CONST_METHOD0(getCpuSvn, const std::vector<uint8_t>&());
+    MOCK_CONST_METHOD0(getSgxTcbComponents, const std::vector<uint8_t>&());
     MOCK_CONST_METHOD1(getSgxTcbComponentSvn, uint32_t(uint32_t));
     MOCK_CONST_METHOD1(getTdxTcbComponentSvn, uint32_t(uint32_t));
+
 };
 
 }}}} // namespace intel { namespace sgx { namespace dcap { namespace test {

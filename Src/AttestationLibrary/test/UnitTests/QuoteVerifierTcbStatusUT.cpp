@@ -37,6 +37,7 @@
 #include "Verifiers/Checks/TcbLevelCheck.h"
 
 #include "QuoteVerifierTcbStatusHelpers.h"
+#include "X509CertTypes.h"
 
 using namespace intel::sgx;
 using namespace dcap::parser::json;
@@ -80,67 +81,69 @@ struct QuoteVerifierTcbStatusUT: public ::testing::TestWithParam<Params> {};
  */
 
 // TcbInfo(LatestStatus, EarliestStatus, LatestTdxModuleStatus, EarliestTdxModuleStatus), Cert, Quote(teeTcbSvn,teeTcbSvn2), QeTcbStatus(optional), result
-// Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), {}, STATUS_OK),
+// Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), ei(), STATUS_OK),
 
 INSTANTIATE_TEST_SUITE_P(StatusOK, QuoteVerifierTcbStatusUT, ::testing::Values(
-Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), {}, STATUS_OK),
-Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), STATUS_OK, STATUS_OK),
+Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), {}, STATUS_OK),
+Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), ei(), STATUS_OK),
 // revoked earliest should not affect us when using latest cert and quote
-Params(ti(latest(UTD), earliest(RKD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), {}, STATUS_OK),
-Params(ti(latest(UTD), earliest(RKD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), STATUS_OK, STATUS_OK)
+Params(ti(latest(UTD), earliest(RKD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), {}, STATUS_OK),
+Params(ti(latest(UTD), earliest(RKD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), ei(), STATUS_OK)
 ), CaseName);
 
 INSTANTIATE_TEST_SUITE_P(StatusRevoked, QuoteVerifierTcbStatusUT, ::testing::Values(
 // Revoked w/o QeTcbStatus
-Params(ti(latest(RKD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), {}, STATUS_TCB_REVOKED),
-Params(ti(latest(UTD), earliest(OOD), module(RKD, OOD)), latestCert(), q(latestSvn, latestSvn), {}, STATUS_TCB_REVOKED),
+Params(ti(latest(RKD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), {}, STATUS_TCB_REVOKED),
+Params(ti(latest(UTD), earliest(OOD), module(RKD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), {}, STATUS_TCB_REVOKED),
 // Revoked w/ QeTcbStatus
-Params(ti(latest(RKD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), STATUS_OK, STATUS_TCB_REVOKED),
-Params(ti(latest(UTD), earliest(OOD), module(RKD, OOD)), latestCert(), q(latestSvn, latestSvn), STATUS_OK, STATUS_TCB_REVOKED),
-Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), STATUS_SGX_ENCLAVE_REPORT_ISVSVN_REVOKED, STATUS_TCB_REVOKED)
+Params(ti(latest(RKD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), ei(), STATUS_TCB_REVOKED),
+Params(ti(latest(UTD), earliest(OOD), module(RKD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), ei(), STATUS_TCB_REVOKED),
+Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, rQeSvn), ei(), STATUS_TCB_REVOKED)
 ), CaseName);
 
 INSTANTIATE_TEST_SUITE_P(StatusOutOfDate, QuoteVerifierTcbStatusUT, ::testing::Values(
-Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), earliestCert(), q(earliestSvn, earliestSvn), {}, STATUS_TCB_OUT_OF_DATE),
-Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), earliestCert(), q(latestSvn, latestSvn), {}, STATUS_TCB_OUT_OF_DATE),
-Params(ti(latest(RKD), earliest(OOD), module(OOD, OOD)), latestCert(), q(earliestSvn, latestSvn), {}, STATUS_TCB_OUT_OF_DATE),
-Params(ti(latest(OOD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), {}, STATUS_TCB_OUT_OF_DATE),
-Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), STATUS_SGX_ENCLAVE_REPORT_ISVSVN_OUT_OF_DATE, STATUS_TCB_OUT_OF_DATE)
+Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), earliestCert(), q(earliestSvn, earliestSvn, utdQeSvn), {}, STATUS_TCB_OUT_OF_DATE),
+Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), earliestCert(), q(latestSvn, latestSvn, utdQeSvn), {}, STATUS_TCB_OUT_OF_DATE),
+Params(ti(latest(RKD), earliest(OOD), module(OOD, OOD)), latestCert(), q(earliestSvn, latestSvn, utdQeSvn), {}, STATUS_TCB_OUT_OF_DATE),
+Params(ti(latest(OOD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), {}, STATUS_TCB_OUT_OF_DATE),
+Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, oodQeSvn), ei(), STATUS_TCB_OUT_OF_DATE),
+Params(ti(latest(UTD), earliest(OOD), module(OOD, OOD)), latestCert(), q(earliestSvn, latestSvn, utdQeSvn), {}, STATUS_TCB_OUT_OF_DATE),
+Params(ti(latest(UTD), earliest(OOD), module(OOD, OOD)), latestCert(), q(earliestSvn, latestSvn, utdQeSvn), ei(), STATUS_TCB_OUT_OF_DATE)
 ), CaseName);
 
 INSTANTIATE_TEST_SUITE_P(StatusSwHardeningNeeded, QuoteVerifierTcbStatusUT, ::testing::Values(
-Params(ti(latest(SHN), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), {}, STATUS_TCB_SW_HARDENING_NEEDED),
-Params(ti(latest(UTD), earliest(SHN), module(UTD, OOD)), earliestCert(), q(latestSvn, latestSvn), STATUS_OK, STATUS_TCB_SW_HARDENING_NEEDED)
+Params(ti(latest(SHN), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), {}, STATUS_TCB_SW_HARDENING_NEEDED),
+Params(ti(latest(UTD), earliest(SHN), module(UTD, OOD)), earliestCert(), q(latestSvn, latestSvn, utdQeSvn), ei(), STATUS_TCB_SW_HARDENING_NEEDED)
 ), CaseName);
 
 INSTANTIATE_TEST_SUITE_P(StatusConfigurationAndSwHardeningNeeded, QuoteVerifierTcbStatusUT, ::testing::Values(
-Params(ti(latest(CN_SHN), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn), {}, STATUS_TCB_CONFIGURATION_AND_SW_HARDENING_NEEDED),
-Params(ti(latest(UTD), earliest(CN_SHN), module(UTD, OOD)), earliestCert(), q(latestSvn, latestSvn), STATUS_OK, STATUS_TCB_CONFIGURATION_AND_SW_HARDENING_NEEDED)
+Params(ti(latest(CN_SHN), earliest(OOD), module(UTD, OOD)), latestCert(), q(latestSvn, latestSvn, utdQeSvn), {}, STATUS_TCB_CONFIGURATION_AND_SW_HARDENING_NEEDED),
+Params(ti(latest(UTD), earliest(CN_SHN), module(UTD, OOD)), earliestCert(), q(latestSvn, latestSvn, utdQeSvn), ei(), STATUS_TCB_CONFIGURATION_AND_SW_HARDENING_NEEDED)
 ), CaseName);
 
 INSTANTIATE_TEST_SUITE_P(StatusTdRelaunchAdvised, QuoteVerifierTcbStatusUT, ::testing::Values(
-Params(ti(latest(UTD), earliest(OOD), module(OOD, OOD)), latestCert(), q(earliestSvn, latestSvn), {}, STATUS_TCB_TD_RELAUNCH_ADVISED),
-Params(ti(latest(UTD), earliest(OOD), module(OOD, OOD)), latestCert(), q(earliestSvn, latestSvn), STATUS_OK, STATUS_TCB_TD_RELAUNCH_ADVISED)
+Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(earliestSvn, latestSvn, utdQeSvn), {}, STATUS_TCB_TD_RELAUNCH_ADVISED),
+Params(ti(latest(UTD), earliest(OOD), module(UTD, OOD)), latestCert(), q(earliestSvn, latestSvn, utdQeSvn), ei(), STATUS_TCB_TD_RELAUNCH_ADVISED)
 
 ), CaseName);
 
 INSTANTIATE_TEST_SUITE_P(StatusTdRelaunchAdvisedConfigurationNeeded, QuoteVerifierTcbStatusUT, ::testing::Values(
-Params(ti(latest(UTD), earliest(OOD_CN), module(OOD, OOD)), latestCert(), q(earliestSvn, latestSvn), {}, STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED),
-Params(ti(latest(CN), earliest(OOD), module(OOD, OOD)), latestCert(), q(earliestSvn, latestSvn), STATUS_OK, STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED)
+Params(ti(latest(UTD), earliest(OOD_CN), module(UTD, OOD)), latestCert(), q(earliestSvn, latestSvn, utdQeSvn), {}, STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED),
+Params(ti(latest(CN), earliest(OOD), module(UTD, OOD)), latestCert(), q(earliestSvn, latestSvn, utdQeSvn), ei(), STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED)
 
 ), CaseName);
 
 TEST_P(QuoteVerifierTcbStatusUT, checkStatuses)
 {
-    Optional<TdxModuleIdentity> tdxModuleIdentity; // ignore, it is not important in the current implementation
     const Params &params = GetParam();
     VerificationCollateralInfo verCollInfo;
+    const auto* enclaveId =
+        params.enclaveIdentity.has_value() ? params.enclaveIdentity.operator->() : nullptr;
 
     const auto result = checkTcbLevel(params.tcbInfo,
                                       params.certificate,
                                       params.quote,
-                                      params.qeTcbStatus,
-                                      tdxModuleIdentity,
+                                      enclaveId,
                                       verCollInfo);
     EXPECT_EQ(printStatus(result), printStatus(params.result));
 }

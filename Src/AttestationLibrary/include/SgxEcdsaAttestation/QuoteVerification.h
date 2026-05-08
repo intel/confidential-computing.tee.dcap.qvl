@@ -218,7 +218,7 @@ QVL_API Status sgxAttestationVerifyQuote(const uint8_t* quote, uint32_t quoteSiz
  * @param intermediateCrl - Null terminated, PEM or DER(hex encoded) formatted x.509 Intel SGX PCK Processor/Platform CRL
  * @param tcbInfoJson - TCB Info structure in JSON format signed by Intel SGX TCB Signing Certificate.
  * @param qeIdentityJson - QE Identity structure in JSON format signed by Intel SGX TCB Signing Certificate.
- * @param verificationCollateralInfo - Buffer with serialized Verification Collateral Info Structure filled during function execution
+ * @param verificationCollateralInfo - [optional] Buffer with serialized Verification Collateral Info Structure filled during function execution. If the caller does not need additional Verification Collateral Info, the value of this parameter should be set to NULL and the value of Verification Collateral Info Size should be set to 0.
  * @param verificationCollateralInfoSize - Size of verificationCollateralInfo buffer. Function heavily relies on this input as internal buffer is allocated based on it without boundaries check! It's user responsibility to provide proper validation.
  * @return Status code of the operation, one of:
  *      - STATUS_OK

@@ -31,7 +31,9 @@
 
 #include "StatusPrinter.h"
 #include <array>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
 
 namespace intel::sgx::dcap {
 
@@ -155,4 +157,27 @@ std::string printStatusOnly(const Status s)
     }
     return statusStrs[s];
 }
+
+std::unordered_map<Status, std::string> STATUS_TO_TCB_STRING_MAP = {
+    { STATUS_OK, "UpToDate" },
+    { STATUS_TCB_OUT_OF_DATE, "OutOfDate" },
+    { STATUS_TCB_REVOKED, "Revoked" },
+    { STATUS_TCB_CONFIGURATION_NEEDED, "ConfigurationNeeded" },
+    { STATUS_TCB_OUT_OF_DATE_CONFIGURATION_NEEDED, "OutOfDateConfigurationNeeded" },
+    { STATUS_TCB_SW_HARDENING_NEEDED, "SWHardeningNeeded" },
+    { STATUS_TCB_CONFIGURATION_AND_SW_HARDENING_NEEDED, "ConfigurationAndSWHardeningNeeded" },
+    { STATUS_TCB_TD_RELAUNCH_ADVISED, "TDRelaunchAdvised" },
+    { STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED, "TDRelaunchAdvisedConfigurationNeeded" },
+};
+
+std::string printTCBStatus(const Status s)
+{
+    const auto find = STATUS_TO_TCB_STRING_MAP.find(s);
+    if (find == STATUS_TO_TCB_STRING_MAP.end())
+    {
+        throw std::invalid_argument("Unsupported TCB status: " + std::to_string(s));
+    }
+    return find->second;
+}
+
 }

@@ -45,22 +45,27 @@ class VerificationCollateralInfo
 {
 public:
     VerificationCollateralInfo();
-    void addTcbInfoData(const parser::json::TcbInfo& tcbInfo, std::tuple<Optional<parser::json::TcbLevel>, Optional<parser::json::TcbLevel>>& matchedTcbLevels);
-    void addEnclaveIdentityData(const parser::json::EnclaveIdentity& enclaveIdentity, const parser::json::IdentityTcbLevel& matchedTcbLevel);
-    void addTdxModuleData(const parser::json::TdxModuleTcbLevel& matchedTdxModuleTcbLevel);
+    void addLaunchInfo(const std::time_t& tcbDate, const std::vector<std::string>& advisoryIds, const std::string& tcbStatus);
+    void addCurrentInfo(const std::time_t& tcbDate, const std::vector<std::string>& advisoryIds, const std::string& tcbStatus);
+    void addTcbInfoData(const parser::json::TcbInfo& tcbInfo);
+    void addEnclaveIdentityData(const parser::json::EnclaveIdentity& enclaveIdentity);
     std::vector<uint8_t> aggregateDataAndParseToVec();
-    bool isError() const;
-    void setError();
+    bool isFilled() const;
+    void setFilled();
 protected:
     int _id;
     int _version;
     std::vector<time_t> _issueDates{};
     std::vector<time_t> _nextUpdates{};
     std::vector<unsigned  int> _tcbEvalNumbers{};
-    std::vector<time_t> _tcbDates{};
-    std::set<std::string> _advisoryIds{};
+    std::time_t _launchTcbDate{0};
+    std::time_t _currentTcbDate{0};
+    std::set<std::string> _launchAdvisoryIds{};
+    std::set<std::string> _currentAdvisoryIds{};
+    std::string _launchTcbStatus{};
+    std::string _currentTcbStatus{};
 
-    bool _isError;
+    bool _isFilled = true;
 };
 
 /**

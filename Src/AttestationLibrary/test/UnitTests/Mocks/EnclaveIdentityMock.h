@@ -44,6 +44,9 @@ public:
     MOCK_CONST_METHOD0(getStatus, Status());
     MOCK_CONST_METHOD0(getVersion, uint32_t());
     MOCK_CONST_METHOD0(getNextUpdate, time_t());
+    MOCK_CONST_METHOD0(getIssueDate, time_t());
+    MOCK_CONST_METHOD0(getTcbEvaluationDataNumber, uint32_t());
+    MOCK_CONST_METHOD1(getTcbLevel, parser::json::IdentityTcbLevel(uint32_t tcbVersion));
 };
 
 }}}}

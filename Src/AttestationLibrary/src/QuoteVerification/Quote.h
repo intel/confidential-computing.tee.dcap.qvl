@@ -55,6 +55,7 @@ public:
     // Access helpers
     const std::vector<uint8_t>& getSignedData() const;
     const std::array<uint8_t, 16>& getTeeTcbSvn() const;
+    const std::array<uint8_t, 16>& getTeeTcbSvn2() const;
     const std::array<uint8_t, 48>& getMrSignerSeam() const;
     const std::array<uint8_t, 8>& getSeamAttributes() const;
 

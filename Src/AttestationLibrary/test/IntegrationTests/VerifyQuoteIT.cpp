@@ -218,11 +218,15 @@ struct VerifyQuoteIT : public Test
         return signatureArr;
     }
 
-    void checkVerCollInfo(std::vector<uint8_t>& verCollInfo)
+    void checkVerCollInfo(const std::vector<uint8_t>& verCollInfo, const std::string& advisoryIds) const
     {
         uint16_t _id, _version;
-        time_t _issueDateMin, _issueDateMax, _expirationDate, _tcbDate;
+        time_t _issueDateMin, _issueDateMax, _expirationDate, _launchTcbDate, _currentTcbDate;
         unsigned int offset = 0, _tcbEvalNumber;
+        char _launchAdvisoryIds[constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN];
+        char _currentAdvisoryIds[constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN];
+        char _launchTcbStatus[constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN];
+        char _currentTcbStatus[constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN];
 
         std::memcpy(&_id, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_ID_SIZE_BYTE_LEN);
         offset+=constants::VERIFICATION_COLLATERAL_INFO_ID_SIZE_BYTE_LEN;
@@ -242,15 +246,36 @@ struct VerifyQuoteIT : public Test
         std::memcpy(&_tcbEvalNumber, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_TCB_EVALUATION_DATA_NUMBER_SIZE_BYTE_LEN);
         offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_EVALUATION_DATA_NUMBER_SIZE_BYTE_LEN;
 
-        std::memcpy(&_tcbDate, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN);
+        std::memcpy(&_launchTcbDate, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN;
 
-        ASSERT_EQ(1, _id);
-        ASSERT_EQ(1, _version);
-        ASSERT_EQ(getEpochTimeFromString(issueDate), _issueDateMin);
-        ASSERT_EQ(getEpochTimeFromString(issueDate), _issueDateMax);
-        ASSERT_EQ(getEpochTimeFromString(nextUpdate), _expirationDate);
-        ASSERT_EQ(tcbEvaluationDataNumber, _tcbEvalNumber);
-        ASSERT_EQ(getEpochTimeFromString(tcbDate), _tcbDate);
+        std::memcpy(&_currentTcbDate, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_DATE_SIZE_BYTE_LEN;
+
+        std::memcpy(&_launchAdvisoryIds, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN;
+
+        std::memcpy(&_currentAdvisoryIds, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_ADVISORY_IDS_SIZE_BYTE_LEN;
+
+        std::memcpy(&_launchTcbStatus, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN;
+
+        std::memcpy(&_currentTcbStatus, &verCollInfo[offset], constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN);
+        offset+=constants::VERIFICATION_COLLATERAL_INFO_TCB_STATUS_BYTE_LEN;
+
+        EXPECT_EQ(1, _id);
+        EXPECT_EQ(2, _version);
+        EXPECT_EQ(getEpochTimeFromString(issueDate), _issueDateMin);
+        EXPECT_EQ(getEpochTimeFromString(issueDate), _issueDateMax);
+        EXPECT_EQ(getEpochTimeFromString(nextUpdate), _expirationDate);
+        EXPECT_EQ(tcbEvaluationDataNumber, _tcbEvalNumber);
+        EXPECT_EQ(getEpochTimeFromString(tcbDate), _launchTcbDate);
+        EXPECT_EQ(getEpochTimeFromString(tcbDate), _currentTcbDate);
+        EXPECT_EQ(advisoryIds, _launchAdvisoryIds);
+        EXPECT_EQ(advisoryIds, _currentAdvisoryIds);
+        EXPECT_EQ(status, _launchTcbStatus);
+        EXPECT_EQ(status, _currentTcbStatus);
     }
 };
 
@@ -713,12 +738,12 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKAndCreateVerificationCollateralInfoW
     std::string verCollInfoStr(verCollInfo.begin(), verCollInfo.end());
 
     // THEN
-    checkVerCollInfo(verCollInfo);
+    checkVerCollInfo(verCollInfo, tcbInfoAdvisory + "," + enclaveIdentityAdvisory + "," + tdxModuleIdentityAdvisory);
+    EXPECT_EQ(STATUS_OK, result);
+
     ASSERT_TRUE(verCollInfoStr.find(tcbInfoAdvisory) != std::string::npos);
     ASSERT_TRUE(verCollInfoStr.find(enclaveIdentityAdvisory) != std::string::npos);
     ASSERT_TRUE(verCollInfoStr.find(tdxModuleIdentityAdvisory) != std::string::npos);
-
-    EXPECT_EQ(STATUS_OK, result);
 }
 
 TEST_F(VerifyQuoteIT, shouldReturnedStatusOKAndCreateVerificationCollateralInfoWhenVerifyTdxQuoteV4WithoutTdxModuleIdentitySuccessfully)
@@ -794,11 +819,11 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKAndCreateVerificationCollateralInfoW
     std::string verCollInfoStr(verCollInfo.begin(), verCollInfo.end());
 
     // THEN
-    checkVerCollInfo(verCollInfo);
+    EXPECT_EQ(STATUS_OK, result);
+    checkVerCollInfo(verCollInfo, tcbInfoAdvisory + "," + enclaveIdentityAdvisory);
     ASSERT_TRUE(verCollInfoStr.find(tcbInfoAdvisory) != std::string::npos);
     ASSERT_TRUE(verCollInfoStr.find(enclaveIdentityAdvisory) != std::string::npos);
     ASSERT_TRUE(verCollInfoStr.find(tdxModuleIdentityAdvisory) == std::string::npos); // no advisoryIds from tdxModuleIdentity
-    EXPECT_EQ(STATUS_OK, result);
 }
 
 TEST_F(VerifyQuoteIT, shouldReturnedStatusTdxModuleMismatchWhenVerifyTdxQuoteV4WithDifferentMrsignerSeam)
@@ -988,7 +1013,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKAndCreateVerificationCollateralInfoW
     std::string verCollInfoStr(verCollInfo.begin(), verCollInfo.end());
 
     // THEN
-    checkVerCollInfo(verCollInfo);
+    checkVerCollInfo(verCollInfo, tcbInfoAdvisory + "," + tdxModuleIdentityAdvisory);
     ASSERT_TRUE(verCollInfoStr.find(tcbInfoAdvisory) != std::string::npos);
     ASSERT_TRUE(verCollInfoStr.find(enclaveIdentityAdvisory) == std::string::npos); // no advisoryId from enclaveIdentity
     ASSERT_TRUE(verCollInfoStr.find(tdxModuleIdentityAdvisory) != std::string::npos);
@@ -1042,7 +1067,7 @@ TEST_F(VerifyQuoteIT, shouldReturnedStatusOKAndNoAdvisoriesInVerificationCollate
     std::string verCollInfoStr(verCollInfo.begin(), verCollInfo.end());
 
     // THEN
-    checkVerCollInfo(verCollInfo);
+    checkVerCollInfo(verCollInfo, "");
     // matched TcbLevels have empty advisoryIds
     ASSERT_TRUE(verCollInfoStr.find(tcbInfoAdvisory) == std::string::npos); // no advisoryId from tcbInfo
     ASSERT_TRUE(verCollInfoStr.find(enclaveIdentityAdvisory) == std::string::npos); // no advisoryId from enclaveIdentity

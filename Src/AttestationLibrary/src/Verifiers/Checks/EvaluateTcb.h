@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+* Copyright (C) 2026 Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,40 +29,34 @@
  *
  */
 
-#ifndef SGXECDSAATTESTATION_TCBINFO_JSON_VERIFIER_MOCK_H_
-#define SGXECDSAATTESTATION_TCBINFO_JSON_VERIFIER_MOCK_H_
-
-#include <gmock/gmock.h>
+#ifndef SGXECDSAATTESTATION_EVALUATETCB_H
+#define SGXECDSAATTESTATION_EVALUATETCB_H
 
 #include <SgxEcdsaAttestation/AttestationParsers.h>
+#include "SgxEcdsaAttestation/QuoteVerification.h"
+#include "Utils/Optional.h"
 
-#include <string>
-#include <vector>
+namespace intel::sgx::dcap {
 
+    Status sgxEvaluateTCB(const std::vector<uint8_t>& tcbComponents, // in
+                          const uint32_t pceSvn, // in
+                          const uint16_t qeSvn, // in
+                          const dcap::parser::json::TcbInfo& tcbInfo, // in
+                          const dcap::parser::json::EnclaveIdentity *qeIdentity, // in optional
+                          Status& tcbStatus, // out
+                          std::time_t& tcbDate, // out
+                          std::vector<std::string>& advisoryIds); // out
 
-namespace intel { namespace sgx { namespace dcap { namespace test {
+    Status tdxEvaluateTCB(const std::vector<uint8_t>& tcbComponents, // in
+                          const uint32_t pceSvn, // in
+                          const uint16_t qeSvn, // in
+                          const std::vector<uint8_t>& teeTcbSvns, // in
+                          const dcap::parser::json::TcbInfo& tcbInfo, // in
+                          const dcap::parser::json::EnclaveIdentity* qeIdentity, // in optional
+                          Status& tcbStatus, // out
+                          std::time_t& tcbDate, // out
+                          std::vector<std::string>& advisoryIds); // out
 
+} // intel::sgx::dcap
 
-class TcbInfoMock: public dcap::parser::json::TcbInfo
-{
-public:
-    MOCK_METHOD1(parse, Status(const std::string&));
-
-    MOCK_CONST_METHOD0(getInfoBody, const std::vector<uint8_t>&());
-    MOCK_CONST_METHOD0(getSignature, const std::vector<uint8_t>&());
-    MOCK_CONST_METHOD0(getFmspc, const std::vector<uint8_t>&());
-    MOCK_CONST_METHOD0(getPceId, const std::vector<uint8_t>&());
-    MOCK_CONST_METHOD0(getId, std::string());
-    MOCK_CONST_METHOD0(getVersion, uint32_t());
-    MOCK_CONST_METHOD0(getTcbLevels, const std::set<dcap::parser::json::TcbLevel, std::greater<dcap::parser::json::TcbLevel>>&());
-    MOCK_CONST_METHOD0(getNextUpdate, time_t());
-    MOCK_CONST_METHOD0(getIssueDate, time_t());
-    MOCK_CONST_METHOD0(getTcbEvaluationDataNumber, uint32_t());
-    MOCK_CONST_METHOD0(getTdxModule, const dcap::parser::json::TdxModule&());
-    MOCK_CONST_METHOD0(getTdxModuleIdentities, const std::vector<dcap::parser::json::TdxModuleIdentity>&());
-};
-
-
-}}}}
-
-#endif
+#endif //SGXECDSAATTESTATION_EVALUATETCB_H

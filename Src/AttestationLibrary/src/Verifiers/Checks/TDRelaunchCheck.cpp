@@ -31,8 +31,6 @@
 
 #include "TDRelaunchCheck.h"
 #include "TdxModuleCheck.h"
-#include "Utils/Logger.h"
-#include "OpensslHelpers/Bytes.h"
 
 namespace intel::sgx::dcap {
 
@@ -49,97 +47,23 @@ bool isConfigurationNeeded(const Status &status)
     }
 }
 
-Status checkForRelaunch(const std::array<uint8_t, 16> &teeTcbSvn2, const TcbInfo &tcbInfo,
-                        const Status sgxTcbStatus,
-                        const Status tdxTcbStatus,
-                        const Status tdxModuleTcbStatus,
-                        const Optional<Status> qeTcbStatus)
+Status checkForRelaunch(const Status launchTcbStatus, const Status currentTcbStatus)
 {
-    LOG_INFO("TD Report - TdxSvn2: {}", bytesToHexString(std::vector<uint8_t>(begin(teeTcbSvn2), end(teeTcbSvn2))));
-
-    // ifception, but that is a literal implementation from documentation
-    if (!qeTcbStatus.has_value() || (
-            qeTcbStatus != STATUS_SGX_ENCLAVE_REPORT_ISVSVN_OUT_OF_DATE &&
-            qeTcbStatus != STATUS_SGX_ENCLAVE_REPORT_ISVSVN_REVOKED &&
-            qeTcbStatus != STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED))
+    if (launchTcbStatus == STATUS_TCB_OUT_OF_DATE || launchTcbStatus == STATUS_TCB_OUT_OF_DATE_CONFIGURATION_NEEDED)
     {
-        if (sgxTcbStatus == STATUS_OK ||
-            sgxTcbStatus == STATUS_TCB_SW_HARDENING_NEEDED ||
-            sgxTcbStatus == STATUS_TCB_CONFIGURATION_NEEDED ||
-            sgxTcbStatus == STATUS_TCB_CONFIGURATION_AND_SW_HARDENING_NEEDED)
+        if (currentTcbStatus == STATUS_OK || currentTcbStatus == STATUS_TCB_SW_HARDENING_NEEDED ||
+            currentTcbStatus == STATUS_TCB_CONFIGURATION_NEEDED || currentTcbStatus == STATUS_TCB_CONFIGURATION_AND_SW_HARDENING_NEEDED)
         {
-            if (tdxTcbStatus == STATUS_TCB_OUT_OF_DATE ||
-                tdxTcbStatus == STATUS_TCB_OUT_OF_DATE_CONFIGURATION_NEEDED)
+            if (isConfigurationNeeded(launchTcbStatus) || isConfigurationNeeded(currentTcbStatus))
             {
-                if (tdxModuleTcbStatus == STATUS_TCB_OUT_OF_DATE)
-                {
-                    if (tcbInfo.getTcbLevels().empty())
-                    {
-                        LOG_ERROR("Could not find any TDX TCB level");
-                        return STATUS_TCB_NOT_SUPPORTED;
-                    }
-
-                    const auto &latestTcbLevel = tcbInfo.getTcbLevels().begin();
-                    LOG_INFO("Latest TDX TCB Level - sgx: {}, tdx: {}, pceSvn: {}, status: {}",
-                             bytesToHexString(latestTcbLevel->getCpuSvn()),
-                             bytesToHexString(tcbComponentsToVectorOfBytes(latestTcbLevel->getTdxTcbComponents())),
-                             latestTcbLevel->getPceSvn(),
-                             latestTcbLevel->getStatus());
-                    if (teeTcbSvn2[1] == 0)
-                    {
-                        if (teeTcbSvn2[0] >= latestTcbLevel->getTdxTcbComponent(0).getSvn() &&
-                            teeTcbSvn2[2] >= latestTcbLevel->getTdxTcbComponent(2).getSvn())
-                        {
-                            if (isConfigurationNeeded(sgxTcbStatus) ||
-                                isConfigurationNeeded(tdxTcbStatus))
-                            {
-                                return STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED;
-                            }
-                            else
-                            {
-                                return STATUS_TCB_TD_RELAUNCH_ADVISED;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        const auto &tdxModuleIdentity2 = findTdxModuleIdentity(
-                                tcbInfo.getTdxModuleIdentities(),
-                                teeTcbSvn2[1]);
-                        if (!tdxModuleIdentity2)
-                        {
-                            return STATUS_TDX_MODULE_MISMATCH;
-                        }
-
-                        if (tdxModuleIdentity2->getTcbLevels().empty())
-                        {
-                            LOG_ERROR("Could not find any TDX Module TCB level");
-                            return STATUS_TCB_NOT_SUPPORTED;
-                        }
-
-                        const auto &latestTdxModuleIdentity = tdxModuleIdentity2->getTcbLevels().begin();
-                        LOG_INFO("Latest TDX Module Identity - IsvSvn: {}, status: {}",
-                                 latestTdxModuleIdentity->getTcb().getIsvSvn(),
-                                 latestTdxModuleIdentity->getStatus());
-                        if (teeTcbSvn2[0] >= latestTdxModuleIdentity->getTcb().getIsvSvn() &&
-                            teeTcbSvn2[2] >= latestTcbLevel->getTdxTcbComponent(2).getSvn())
-                        {
-                            if (isConfigurationNeeded(sgxTcbStatus) ||
-                                isConfigurationNeeded(tdxTcbStatus))
-                            {
-                                return STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED;
-                            }
-                            else
-                            {
-                                return STATUS_TCB_TD_RELAUNCH_ADVISED;
-                            }
-                        }
-                    }
-                }
+                return STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED;
             }
+
+            return STATUS_TCB_TD_RELAUNCH_ADVISED;
         }
     }
-    return tdxTcbStatus;
+
+    return launchTcbStatus;
 }
 
 } // namespace intel::sgx::dcap

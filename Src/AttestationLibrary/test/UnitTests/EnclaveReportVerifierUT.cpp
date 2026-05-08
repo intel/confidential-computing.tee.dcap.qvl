@@ -102,28 +102,6 @@ struct EnclaveReportVerifierUT : public Test
         return eReport;
     }
 
-    void checkVerCollInfoEmpty()
-    {
-        ASSERT_EQ(1, verificationCollateralInfo.getId());
-        ASSERT_EQ(1, verificationCollateralInfo.getVersion());
-        ASSERT_EQ(std::vector<time_t>(), verificationCollateralInfo.getIssueDates());
-        ASSERT_EQ(std::vector<time_t>(), verificationCollateralInfo.getNextUpdates());
-        ASSERT_EQ(std::vector<unsigned int>(), verificationCollateralInfo.getTcbEvalNumbers());
-        ASSERT_EQ(std::vector<time_t>(), verificationCollateralInfo.getTcbDates());
-        ASSERT_EQ(std::set<std::string>(), verificationCollateralInfo.getAdvisoryIds());
-    }
-
-    void checkVerCollInfoFilled(const std::set<std::string>& advisoryIds)
-    {
-        ASSERT_EQ(1, verificationCollateralInfo.getId());
-        ASSERT_EQ(1, verificationCollateralInfo.getVersion());
-        ASSERT_EQ(std::vector<time_t>{getEpochTimeFromString(model.issueDate)}, verificationCollateralInfo.getIssueDates());
-        ASSERT_EQ(std::vector<time_t>{getEpochTimeFromString(model.nextUpdate)}, verificationCollateralInfo.getNextUpdates());
-        ASSERT_EQ(std::vector<unsigned int>{model.tcbEvaluationDataNumber}, verificationCollateralInfo.getTcbEvalNumbers());
-        ASSERT_EQ(std::vector<time_t>{getEpochTimeFromString(tcbDate)}, verificationCollateralInfo.getTcbDates());
-        ASSERT_EQ(advisoryIds, verificationCollateralInfo.getAdvisoryIds());
-    }
-
     std::string generateEnclaveIdentity(std::string bodyJson);
 };
 
@@ -144,10 +122,9 @@ TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportMiscselectMismatchWhenM
 
     auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport());
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_MISCSELECT_MISMATCH, result);
-    checkVerCollInfoEmpty();
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportAttributestMismatchWhenAttributesIsDifferent)
@@ -158,10 +135,9 @@ TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportAttributestMismatchWhen
 
     auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport());
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ATTRIBUTES_MISMATCH, result);
-    checkVerCollInfoEmpty();
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportAttributestMismatchWhenIdentityAttributesHasIncorrectSize)
@@ -211,10 +187,9 @@ TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportMrsignerMismatchWhenMrs
 
     auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport());
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_MRSIGNER_MISMATCH, result);
-    checkVerCollInfoEmpty();
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportIsvprodidMismatchWhenIsvprodidIsDifferent)
@@ -225,10 +200,9 @@ TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportIsvprodidMismatchWhenIs
 
     auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport());
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVPRODID_MISMATCH, result);
-    checkVerCollInfoEmpty();
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportNotSupportedWhenIsvsvnIsBelowAllLevels)
@@ -239,10 +213,9 @@ TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportNotSupportedWhenIsvsvnI
 
     auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport());
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED, result);
-    checkVerCollInfoEmpty();
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportRevokedWhenIsvsvnIsOnRevokedLevel)
@@ -253,10 +226,9 @@ TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportRevokedWhenIsvsvnIsOnRe
 
     auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport());
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_REVOKED, result);
-    checkVerCollInfoFilled({revokedLevelAdvisory});
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportOutOfDateWhenIsvsvnIsOnOutOfDateLevel)
@@ -267,10 +239,9 @@ TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportOutOfDateWhenIsvsvnIsOn
 
     auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport());
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_OUT_OF_DATE, result);
-    checkVerCollInfoFilled({outOfDateLevelAdvisory});
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnStatusOkWhenJsonIsOk)
@@ -280,10 +251,9 @@ TEST_F(EnclaveReportVerifierUT, shouldReturnStatusOkWhenJsonIsOk)
 
     auto enclaveIdentity = EnclaveIdentity::parse(generateEnclaveIdentity(json));
 
-    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport(), &verificationCollateralInfo);
+    auto result = enclaveReportVerifier.verify(&enclaveIdentity, getEnclaveReport());
 
     ASSERT_EQ(STATUS_OK, result);
-    checkVerCollInfoFilled({});
 }
 
 TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportNotSupportedWhenIsvSvnisOneAndEnclaveIdentityHavingTcbsBelowFive)
@@ -298,16 +268,14 @@ TEST_F(EnclaveReportVerifierUT, shouldReturnEnclaveReportNotSupportedWhenIsvSvni
     enclaveReport.isvSvn = 1;
     string json = modelISVSVN2.toJSON();
     auto enclaveIdentityISVSVN2 = EnclaveIdentity::parse(generateEnclaveIdentity(json));
-    auto resultISVSVN2 = enclaveReportVerifier.verify(&enclaveIdentityISVSVN2, getEnclaveReport(), &verificationCollateralInfo);
+    auto resultISVSVN2 = enclaveReportVerifier.verify(&enclaveIdentityISVSVN2, getEnclaveReport());
 
     enclaveReport.applyEnclaveIdentity(modelISVSVN3);
     enclaveReport.isvSvn = 1;
     json = modelISVSVN3.toJSON();
     auto enclaveIdentityISVSVN3 = EnclaveIdentity::parse(generateEnclaveIdentity(json));
-    auto resultISVSVN3 = enclaveReportVerifier.verify(&enclaveIdentityISVSVN3, getEnclaveReport(), &verificationCollateralInfo);
+    auto resultISVSVN3 = enclaveReportVerifier.verify(&enclaveIdentityISVSVN3, getEnclaveReport());
 
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED, resultISVSVN2);
-    checkVerCollInfoEmpty();
     ASSERT_EQ(STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED, resultISVSVN3);
-    checkVerCollInfoEmpty();
 }

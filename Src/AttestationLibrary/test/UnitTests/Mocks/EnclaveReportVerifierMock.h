@@ -42,7 +42,7 @@ namespace intel { namespace sgx { namespace dcap { namespace test {
 class EnclaveReportVerifierMock: public virtual dcap::EnclaveReportVerifier
 {
 public:
-    MOCK_CONST_METHOD3(verify, Status(const parser::json::EnclaveIdentity*, const EnclaveReport&, VerificationCollateralInfo*));
+    MOCK_CONST_METHOD2(verify, Status(const parser::json::EnclaveIdentity*, const EnclaveReport&));
 };
 
 }}}}

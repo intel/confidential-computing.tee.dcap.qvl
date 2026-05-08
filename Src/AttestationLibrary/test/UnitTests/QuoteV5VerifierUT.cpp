@@ -43,7 +43,6 @@
 #include "DigestUtils.h"
 #include "QuoteV5Generator.h"
 #include "KeyHelpers.h"
-#include "Constants/QuoteTestConstants.h"
 #include "EcdsaSignatureGenerator.h"
 #include "CertVerification/X509Constants.h"
 
@@ -52,6 +51,17 @@ using namespace dcap::parser::json;
 using namespace ::testing;
 
 namespace {
+
+    std::vector<TcbComponent> arrayToComponentVector(std::array<uint8_t,16>& arr)
+    {
+        auto vec = std::vector<TcbComponent>();
+        vec.reserve(arr.size());
+        for (unsigned char & i : arr)
+        {
+            vec.emplace_back(i);
+        }
+        return vec;
+    }
 
     uint16_t toUint16(uint8_t leftMostByte, uint8_t rightMostByte)
     {
@@ -98,6 +108,8 @@ struct QuoteV5VerifierUT: public testing::Test
         tdxTcbComponents[0] = TcbComponent(0x02); // minor SVN
         tdxTcbComponents[1] = TcbComponent(0x01); // major SVN
     }
+
+    const time_t currentTime = 5000; // std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     const dcap::crypto::EVP_PKEY_uptr privKey = dcap::test::priv(dcap::test::PEM_PRV);
     const dcap::crypto::EVP_PKEY_uptr pubKey = dcap::test::pub(dcap::test::PEM_PUB);
     const std::vector<uint8_t> pckPubKey = dcap::test::getVectorPub(*pubKey);
@@ -114,7 +126,7 @@ struct QuoteV5VerifierUT: public testing::Test
     const std::vector<uint8_t> tdxModuleAttributesMask = std::vector<uint8_t>(8, 0xFF);
     const TdxModule tdxModule = TdxModule(tdxModuleMrSigner, tdxModuleAttributes,
                                                                                   tdxModuleAttributesMask);
-    const std::time_t tdxModuleTcbDate = 1;
+    const std::time_t tdxModuleTcbDate = currentTime-15;
     const std::string tdxModuleAdvisoryId = "INTEL-SA-00009";
     TdxModuleTcbLevel tdxModuleTcbLevel = TdxModuleTcbLevel(
             TdxModuleTcb(2),
@@ -124,6 +136,7 @@ struct QuoteV5VerifierUT: public testing::Test
     const std::vector<TdxModuleIdentity> tdxModuleIdentities = std::vector<TdxModuleIdentity>(1, tdxModuleIdentity);
 
     std::set<TcbLevel, std::greater<TcbLevel>> tcbs{};
+    parser::json::IdentityTcbLevel identityTcbLevel = parser::json::IdentityTcbLevel(0, currentTime-5, parser::json::TcbStatus::UpToDate, {});
 
     NiceMock<test::ValidityMock> validityMock;
     NiceMock<test::TcbMock> tcbMock;
@@ -133,10 +146,13 @@ struct QuoteV5VerifierUT: public testing::Test
     NiceMock<dcap::test::EnclaveIdentityMock> enclaveIdentityV2;
     NiceMock<dcap::test::EnclaveReportVerifierMock> enclaveReportVerifier;
     dcap::test::VerificationCollateralInfoMock verificationCollateralInfo;
+    std::vector<time_t> expectedIssueDates{};
+    std::vector<time_t> expectedNextUpdates{};
+    std::vector<unsigned int> expectedEvaluationNumbers{};
+
     dcap::test::QuoteV5Generator gen;
     dcap::test::QuoteV5Generator::QEReportCertificationData qeReportCertificationData{};
     dcap::test::QuoteV5Generator::CertificationData certificationData{};
-    const time_t currentTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
     /*
      * SetUp represent minimal, positive quote verification data preparation
@@ -146,6 +162,7 @@ struct QuoteV5VerifierUT: public testing::Test
         ON_CALL(validityMock, getNotAfterTime()).WillByDefault(Return(currentTime));
         ON_CALL(tcbMock, getPceSvn()).WillByDefault(Return(48042));
         ON_CALL(tcbMock, getCpuSvn()).WillByDefault(ReturnRef(cpusvn));
+        ON_CALL(tcbMock, getSgxTcbComponents()).WillByDefault(ReturnRef(cpusvn));
         ON_CALL(tcbMock, getSgxTcbComponentSvn(_)).WillByDefault(Return(0x40));
         ON_CALL(tcbMock, getTdxTcbComponentSvn(_)).WillByDefault(Return(0x40));
 
@@ -167,14 +184,20 @@ struct QuoteV5VerifierUT: public testing::Test
         ON_CALL(tcbInfoJson, getPceId()).WillByDefault(testing::ReturnRef(pceId));
         ON_CALL(tcbInfoJson, getFmspc()).WillByDefault(testing::ReturnRef(fmspc));
         ON_CALL(tcbInfoJson, getTcbLevels()).WillByDefault(testing::ReturnRef(tcbs));
-        ON_CALL(tcbInfoJson, getNextUpdate()).WillByDefault(testing::Return(currentTime));
+        ON_CALL(tcbInfoJson, getIssueDate()).WillByDefault(Return(currentTime - 10));
+        ON_CALL(tcbInfoJson, getNextUpdate()).WillByDefault(Return(currentTime + 10));
+        ON_CALL(tcbInfoJson, getTcbEvaluationDataNumber()).WillByDefault(Return(4));
         ON_CALL(tcbInfoJson, getTdxModule()).WillByDefault(testing::ReturnRef(tdxModule));
         ON_CALL(tcbInfoJson, getTdxModuleIdentities()).WillByDefault(testing::ReturnRef(tdxModuleIdentities));
 
         ON_CALL(enclaveIdentityV2, getVersion()).WillByDefault(Return(2));
         ON_CALL(enclaveIdentityV2, getStatus()).WillByDefault(Return(STATUS_OK));
-        ON_CALL(enclaveReportVerifier, verify(_, _, _)).WillByDefault(Return(STATUS_OK));
-        ON_CALL(enclaveReportVerifier, verify(_, _, _)).WillByDefault(Return(STATUS_OK));
+        ON_CALL(enclaveIdentityV2, getIssueDate()).WillByDefault(Return(currentTime - 20));
+        ON_CALL(enclaveIdentityV2, getNextUpdate()).WillByDefault(Return(currentTime + 20));
+        ON_CALL(enclaveIdentityV2, getTcbEvaluationDataNumber()).WillByDefault(Return(3));
+        ON_CALL(enclaveIdentityV2, getTcbLevel(_)).WillByDefault(Return(identityTcbLevel));
+        ON_CALL(enclaveReportVerifier, verify(_, _)).WillByDefault(Return(STATUS_OK));
+        ON_CALL(enclaveReportVerifier, verify(_, _)).WillByDefault(Return(STATUS_OK));
 
         gen.withTDReport10({});
         gen.getAuthData().ecdsaAttestationKey.publicKey = dcap::test::getRawPub(*pubKey);
@@ -196,28 +219,9 @@ struct QuoteV5VerifierUT: public testing::Test
                 signAndGetRaw(gen.getHeader().bytes() + gen.getBody().bytes()+ gen.getEnclaveReport().bytes(), *privKey);
 
         verificationCollateralInfo = test::VerificationCollateralInfoMock();
-    }
-
-    void checkVerCollInfoEmpty() const
-    {
-        ASSERT_EQ(1, verificationCollateralInfo.getId());
-        ASSERT_EQ(1, verificationCollateralInfo.getVersion());
-        ASSERT_EQ(std::vector<time_t>(), verificationCollateralInfo.getIssueDates());
-        ASSERT_EQ(std::vector<time_t>(), verificationCollateralInfo.getNextUpdates());
-        ASSERT_EQ(std::vector<unsigned int>(), verificationCollateralInfo.getTcbEvalNumbers());
-        ASSERT_EQ(std::vector<time_t>(), verificationCollateralInfo.getTcbDates());
-        ASSERT_EQ(std::set<std::string>(), verificationCollateralInfo.getAdvisoryIds());
-    }
-
-    void checkVerCollInfoFilled(const std::vector<time_t>& tcbDates, const std::set<std::string>& advisoryIds) const
-    {
-        ASSERT_EQ(1, verificationCollateralInfo.getId());
-        ASSERT_EQ(1, verificationCollateralInfo.getVersion());
-        ASSERT_EQ(std::vector<time_t>{tcbInfoJson.getIssueDate()}, verificationCollateralInfo.getIssueDates());
-        ASSERT_EQ(std::vector<time_t>{tcbInfoJson.getNextUpdate()}, verificationCollateralInfo.getNextUpdates());
-        ASSERT_EQ(std::vector<unsigned int>{tcbInfoJson.getTcbEvaluationDataNumber()}, verificationCollateralInfo.getTcbEvalNumbers());
-        ASSERT_EQ(tcbDates, verificationCollateralInfo.getTcbDates());
-        ASSERT_EQ(advisoryIds, verificationCollateralInfo.getAdvisoryIds());
+        expectedIssueDates = {{enclaveIdentityV2.getIssueDate(), tcbInfoJson.getIssueDate()}};
+        expectedNextUpdates = {{enclaveIdentityV2.getNextUpdate(), tcbInfoJson.getNextUpdate()}};
+        expectedEvaluationNumbers = {{enclaveIdentityV2.getTcbEvaluationDataNumber(), tcbInfoJson.getTcbEvaluationDataNumber()}};
     }
 
 };
@@ -230,7 +234,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbInfoMismatchWhenFmspcDoesNotMatch
     EXPECT_CALL(tcbInfoJson, getFmspc()).WillRepeatedly(testing::ReturnRef(emptyVector));
 
     EXPECT_EQ(STATUS_TCB_INFO_MISMATCH, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbInfoMismatchWhenPceIdDoesNotMatch)
@@ -241,7 +245,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbInfoMismatchWhenPceIdDoesNotMatch
     EXPECT_CALL(tcbInfoJson, getPceId()).WillRepeatedly(testing::ReturnRef(emptyVector));
 
     EXPECT_EQ(STATUS_TCB_INFO_MISMATCH, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusInvalidPckCrlWhenPeriodAndIssuerIsInvalid)
@@ -254,7 +258,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusInvalidPckCrlWhenPeriodAndIssuerIsIn
 
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_INVALID_PCK_CRL, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusInvalidPckCrlWhenCrlIssuerIsDifferentThanPck)
@@ -267,7 +271,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusInvalidPckCrlWhenCrlIssuerIsDifferen
 
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_INVALID_PCK_CRL, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusPckRevoked)
@@ -279,7 +283,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusPckRevoked)
 
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_PCK_REVOKED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusInvalidQeFormat)
@@ -290,7 +294,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusInvalidQeFormat)
 
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_INVALID_QE_REPORT_DATA, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldVerifySgxCorrectly)
@@ -298,13 +302,13 @@ TEST_F(QuoteV5VerifierUT, shouldVerifySgxCorrectly)
     const auto quoteBin = gen.buildSgxQuote();
 
     tcbs.insert(tcbs.begin(),
-                TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
+                TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime - 5, {}});
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_OK, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime - 5, {}, "UpToDate");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldVerifyTdx10Correctly)
@@ -322,7 +326,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx10Correctly)
                                                                        gen.getTdReport10().bytes(), *privKey);
     const auto quoteBin = gen.buildTdx10Quote();
 
-    tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
+    tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-5});
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
     EXPECT_CALL(tcbInfoJson, getVersion()).WillRepeatedly(testing::Return(3));
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillRepeatedly(testing::ReturnRef(tcbs));
@@ -333,7 +337,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx10Correctly)
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_OK, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0, tdxModuleTcbDate}, {tdxModuleAdvisoryId});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers,  tdxModuleTcbDate, {tdxModuleAdvisoryId}, "UpToDate");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15Correctly)
@@ -342,8 +346,11 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15Correctly)
     header.version = 5;
     header.teeType = dcap::constants::TEE_TYPE_TDX;
     auto tdReport = dcap::test::QuoteV5Generator::TDReport15{};
+    uint8_t isvSvn = 3;
     tdReport.teeTcbSvn = { 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    tdReport.teeTcbSvn2 = { isvSvn, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     gen.withTDReport15(tdReport);
     gen.withHeader(header);
     gen.withBody({ dcap::constants::BODY_TD_REPORT15_TYPE, dcap::constants::TD_REPORT15_BYTE_LEN });
@@ -351,7 +358,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15Correctly)
                                                                        gen.getTdReport15().bytes(), *privKey);
     const auto quoteBin = gen.buildTdx15Quote();
 
-    tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
+    tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-5});
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
     EXPECT_CALL(tcbInfoJson, getVersion()).WillRepeatedly(testing::Return(3));
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillRepeatedly(testing::ReturnRef(tcbs));
@@ -360,7 +367,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15Correctly)
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_OK, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0, tdxModuleTcbDate}, {tdxModuleAdvisoryId});
+    verificationCollateralInfo.checkVerCollInfoFilled(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers,  tdxModuleTcbDate, tdxModuleTcbDate, {tdxModuleAdvisoryId}, {tdxModuleAdvisoryId}, "UpToDate","UpToDate");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15CorrectlyWhenTdxModuleVersionIsZero)
@@ -371,6 +378,8 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15CorrectlyWhenTdxModuleVersionIsZero)
     auto tdReport = dcap::test::QuoteV5Generator::TDReport15{};
     tdReport.teeTcbSvn = { 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 2nd svn zeroed
                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    tdReport.teeTcbSvn2 = { 0x52, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     gen.withTDReport15(tdReport);
     gen.withHeader(header);
     gen.withBody({ dcap::constants::BODY_TD_REPORT15_TYPE, dcap::constants::TD_REPORT15_BYTE_LEN });
@@ -380,7 +389,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15CorrectlyWhenTdxModuleVersionIsZero)
 
     tdxTcbComponents[1] = 0; // 2nd svn zeroed
 
-    tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
+    tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-5});
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
     EXPECT_CALL(tcbInfoJson, getVersion()).WillRepeatedly(testing::Return(3));
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillRepeatedly(testing::ReturnRef(tcbs));
@@ -389,7 +398,7 @@ TEST_F(QuoteV5VerifierUT, shouldVerifyTdx15CorrectlyWhenTdxModuleVersionIsZero)
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_OK, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {});
+    verificationCollateralInfo.checkVerCollInfoFilled(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, currentTime-5, {}, {}, "UpToDate", "UpToDate");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxModuleVersionIs0)
@@ -398,9 +407,10 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxM
     header.version = 5;
     header.teeType = dcap::constants::TEE_TYPE_TDX;
     auto tdReport = dcap::test::QuoteV5Generator::TDReport15{};
-    tdReport.teeTcbSvn = { 0x50, 0x01, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte (ModuleVersion) is 0 to make sure that expected TDX Module TCB Levels are used.
+    uint8_t isvSvn = 3;
+    tdReport.teeTcbSvn = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    tdReport.teeTcbSvn2 = { 0xF0, 0x00, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte (ModuleVersion) is 0 to make sure that expected TCB Levels are used.
+    tdReport.teeTcbSvn2 = { isvSvn, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     gen.withTDReport15(tdReport);
     gen.withHeader(header);
@@ -409,14 +419,12 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxM
                                                                gen.getTdReport15().bytes(), *privKey);
     const auto quoteBin = gen.buildTdx15Quote();
 
-    tdxTcbComponents[1] = 0; // 0 to make sure that expected TDX Module TCB Levels are used.
-
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0xF0)), toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "OutOfDate", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, arrayToComponentVector(tdReport.teeTcbSvn2), toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-3});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, arrayToComponentVector(tdReport.teeTcbSvn), toUint16(pcesvn[1], pcesvn[0]), "OutOfDate", currentTime-5, {"INTEL-SA-00001"}});
 
     std::set<TdxModuleTcbLevel, std::greater<TdxModuleTcbLevel>> moduleTcbLevels = {
-            TdxModuleTcbLevel(TdxModuleTcb(81), tdxModuleTcbDate, "UpToDate", std::vector<std::string>()),
-            TdxModuleTcbLevel(TdxModuleTcb(2), tdxModuleTcbDate, "OutOfDate", {tdxModuleAdvisoryId})};
+            TdxModuleTcbLevel(TdxModuleTcb(isvSvn), tdxModuleTcbDate, "UpToDate", std::vector<std::string>()),
+            TdxModuleTcbLevel(TdxModuleTcb(2), tdxModuleTcbDate-1, "OutOfDate", {tdxModuleAdvisoryId})};
     const TdxModuleIdentity moduleIdentity = TdxModuleIdentity("TDX_01", tdxModuleMrSigner, tdxModuleAttributes, tdxModuleAttributesMask, moduleTcbLevels);
     const std::vector<TdxModuleIdentity> moduleIdentities = std::vector<TdxModuleIdentity>(1, moduleIdentity);
 
@@ -429,7 +437,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxM
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_TD_RELAUNCH_ADVISED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0, tdxModuleTcbDate}, {"INTEL-SA-00001", tdxModuleAdvisoryId});
+    verificationCollateralInfo.checkVerCollInfoFilled(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, currentTime-5, { "INTEL-SA-00001" }, {}, "TDRelaunchAdvised", "UpToDate");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxModuleVersionIs1)
@@ -438,9 +446,10 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxM
     header.version = 5;
     header.teeType = dcap::constants::TEE_TYPE_TDX;
     auto tdReport = dcap::test::QuoteV5Generator::TDReport15{};
-    tdReport.teeTcbSvn = { 0x50, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte is 1 to make sure that expected TDX Module TCB Levels are used.
+    uint8_t isvSvn = 3;
+    tdReport.teeTcbSvn = { 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte is 1 to make sure that expected TDX Module TCB Levels are used.
                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    tdReport.teeTcbSvn2 = { 0x52, 0x01, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte is 1 to make sure that expected TDX Module TCB Levels are used.
+    tdReport.teeTcbSvn2 = { isvSvn, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte is 1 to make sure that expected TDX Module TCB Levels are used.
                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     gen.withTDReport15(tdReport);
     gen.withHeader(header);
@@ -451,12 +460,12 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxM
 
     tdxTcbComponents[1] = 1; // 1 to make sure that expected TDX Module TCB Levels are used.
 
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0xF0)), toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "OutOfDate"});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, arrayToComponentVector(tdReport.teeTcbSvn2), toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-5});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, arrayToComponentVector(tdReport.teeTcbSvn), toUint16(pcesvn[1], pcesvn[0]), "OutOfDate", currentTime-8});
 
     std::set<TdxModuleTcbLevel, std::greater<TdxModuleTcbLevel>> moduleTcbLevels = {
-            TdxModuleTcbLevel(TdxModuleTcb(81), tdxModuleTcbDate, "UpToDate", std::vector<std::string>()),
-            TdxModuleTcbLevel(TdxModuleTcb(2), tdxModuleTcbDate, "OutOfDate", {tdxModuleAdvisoryId})};
+            TdxModuleTcbLevel(TdxModuleTcb(isvSvn), tdxModuleTcbDate, "UpToDate", std::vector<std::string>()),
+            TdxModuleTcbLevel(TdxModuleTcb(2), tdxModuleTcbDate-1, "OutOfDate", {tdxModuleAdvisoryId})};
     const TdxModuleIdentity moduleIdentity = TdxModuleIdentity("TDX_01", tdxModuleMrSigner, tdxModuleAttributes, tdxModuleAttributesMask, moduleTcbLevels);
     const std::vector<TdxModuleIdentity> moduleIdentities = std::vector<TdxModuleIdentity>(1, moduleIdentity);
 
@@ -469,7 +478,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedWhenTdx15AndTdxM
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_TD_RELAUNCH_ADVISED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0, tdxModuleTcbDate}, {tdxModuleAdvisoryId});
+    verificationCollateralInfo.checkVerCollInfoFilled(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, tdxModuleTcbDate-1, tdxModuleTcbDate, { tdxModuleAdvisoryId }, {  }, "TDRelaunchAdvised", "UpToDate");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNeededWhenTdx15AndTdxModuleVersionIs0)
@@ -478,9 +487,10 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNee
     header.version = 5;
     header.teeType = dcap::constants::TEE_TYPE_TDX;
     auto tdReport = dcap::test::QuoteV5Generator::TDReport15{};
-    tdReport.teeTcbSvn = { 0x50, 0x01, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte (ModuleVersion) is 0 to make sure that expected TDX Module TCB Levels are used.
+    uint8_t isvSvn = 3;
+    tdReport.teeTcbSvn = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte (ModuleVersion) is 0 to make sure that expected TDX Module TCB Levels are used.
                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    tdReport.teeTcbSvn2 = { 0xF0, 0x00, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte (ModuleVersion) is 0 to make sure that expected TCB Levels are used.
+    tdReport.teeTcbSvn2 = { isvSvn, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte (ModuleVersion) is 0 to make sure that expected TCB Levels are used.
                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     gen.withTDReport15(tdReport);
     gen.withHeader(header);
@@ -491,12 +501,12 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNee
 
     tdxTcbComponents[1] = 0; // 0 to make sure that expected TDX Module TCB Levels are used.
 
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0xF0)), toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "OutOfDateConfigurationNeeded", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, arrayToComponentVector(tdReport.teeTcbSvn2), toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-5});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, arrayToComponentVector(tdReport.teeTcbSvn), toUint16(pcesvn[1], pcesvn[0]), "OutOfDateConfigurationNeeded", currentTime-8, {"INTEL-SA-00001"}});
 
     std::set<TdxModuleTcbLevel, std::greater<TdxModuleTcbLevel>> moduleTcbLevels = {
-            TdxModuleTcbLevel(TdxModuleTcb(81), tdxModuleTcbDate, "UpToDate", std::vector<std::string>()),
-            TdxModuleTcbLevel(TdxModuleTcb(2), tdxModuleTcbDate, "OutOfDate", {tdxModuleAdvisoryId})};
+            TdxModuleTcbLevel(TdxModuleTcb(isvSvn), tdxModuleTcbDate, "UpToDate", std::vector<std::string>()),
+            TdxModuleTcbLevel(TdxModuleTcb(2), tdxModuleTcbDate-1, "OutOfDate", {tdxModuleAdvisoryId})};
     const TdxModuleIdentity moduleIdentity = TdxModuleIdentity("TDX_01", tdxModuleMrSigner, tdxModuleAttributes, tdxModuleAttributesMask, moduleTcbLevels);
     const std::vector<TdxModuleIdentity> moduleIdentities = std::vector<TdxModuleIdentity>(1, moduleIdentity);
 
@@ -509,7 +519,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNee
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0, tdxModuleTcbDate}, {"INTEL-SA-00001", tdxModuleAdvisoryId});
+    verificationCollateralInfo.checkVerCollInfoFilled(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-8, currentTime-5, {"INTEL-SA-00001" }, { }, "TDRelaunchAdvisedConfigurationNeeded", "UpToDate");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNeededWhenTdx15AndTdxModuleVersionIs1)
@@ -518,9 +528,10 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNee
     header.version = 5;
     header.teeType = dcap::constants::TEE_TYPE_TDX;
     auto tdReport = dcap::test::QuoteV5Generator::TDReport15{};
-    tdReport.teeTcbSvn = { 0x50, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte is 1 to make sure that expected TDX Module TCB Levels are used.
+    uint8_t isvSvn = 3;
+    tdReport.teeTcbSvn = { 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte is 1 to make sure that expected TDX Module TCB Levels are used.
                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    tdReport.teeTcbSvn2 = { 0x52, 0x01, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte is 1 to make sure that expected TDX Module TCB Levels are used.
+    tdReport.teeTcbSvn2 = { isvSvn, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // #1 byte is 1 to make sure that expected TDX Module TCB Levels are used.
                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     gen.withTDReport15(tdReport);
     gen.withHeader(header);
@@ -529,14 +540,12 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNee
                                                                gen.getTdReport15().bytes(), *privKey);
     const auto quoteBin = gen.buildTdx15Quote();
 
-    tdxTcbComponents[1] = 1; // 1 to make sure that expected TDX Module TCB Levels are used.
-
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0xF0)), toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "OutOfDateConfigurationNeeded", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, arrayToComponentVector(tdReport.teeTcbSvn2), toUint16(pcesvn[1], pcesvn[0]), "ConfigurationNeeded", currentTime-5});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, arrayToComponentVector(tdReport.teeTcbSvn), toUint16(pcesvn[1], pcesvn[0]), "OutOfDate", currentTime-8, {"INTEL-SA-00001"}});
 
     std::set<TdxModuleTcbLevel, std::greater<TdxModuleTcbLevel>> moduleTcbLevels = {
-            TdxModuleTcbLevel(TdxModuleTcb(81), tdxModuleTcbDate, "UpToDate", std::vector<std::string>()),
-            TdxModuleTcbLevel(TdxModuleTcb(2), tdxModuleTcbDate, "OutOfDate", {tdxModuleAdvisoryId})};
+            TdxModuleTcbLevel(TdxModuleTcb(isvSvn), tdxModuleTcbDate, "UpToDate", std::vector<std::string>()),
+            TdxModuleTcbLevel(TdxModuleTcb(2), tdxModuleTcbDate-1, "OutOfDate", {tdxModuleAdvisoryId})};
     const TdxModuleIdentity moduleIdentity = TdxModuleIdentity("TDX_01", tdxModuleMrSigner, tdxModuleAttributes, tdxModuleAttributesMask, moduleTcbLevels);
     const std::vector<TdxModuleIdentity> moduleIdentities = std::vector<TdxModuleIdentity>(1, moduleIdentity);
 
@@ -549,7 +558,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTcbTdRelaunchAdvisedConfigurationNee
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0, tdxModuleTcbDate}, {"INTEL-SA-00001", tdxModuleAdvisoryId});
+    verificationCollateralInfo.checkVerCollInfoFilled(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, tdxModuleTcbDate-1, tdxModuleTcbDate, {tdxModuleAdvisoryId }, {}, "TDRelaunchAdvisedConfigurationNeeded", "ConfigurationNeeded");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenSeamAttricutesNoZeroed)
@@ -569,7 +578,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenSeamAttricutesN
     const auto quoteBin = gen.buildTdx10Quote();
     tdxTcbComponents[1] = 0;
 
-    tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
+    tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-5});
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
     EXPECT_CALL(tcbInfoJson, getVersion()).WillRepeatedly(testing::Return(3));
     auto tdxModuleWithDifferentMask = TdxModule(tdxModule.getMrSigner(), tdxModule.getAttributes(), {0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF});
@@ -577,7 +586,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenSeamAttricutesN
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TDX_MODULE_MISMATCH, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusQEIdentityMismatchWhenTdxQuoteAndEnclaveIdentityV2NotTD_QE)
@@ -591,7 +600,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusQEIdentityMismatchWhenTdxQuoteAndEnc
                                                                        gen.getTdReport10().bytes(), *privKey);
     const auto quoteBin = gen.buildTdx10Quote();
 
-    tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
+    tcbs.insert(tcbs.begin(), TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-5});
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
     EXPECT_CALL(tcbInfoJson, getVersion()).WillRepeatedly(testing::Return(3));
     EXPECT_CALL(enclaveIdentityV2, getID()).WillOnce(testing::Return(EnclaveID::QE));
@@ -599,7 +608,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusQEIdentityMismatchWhenTdxQuoteAndEnc
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_QE_IDENTITY_MISMATCH, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenTdReportMrsignerSeamDoesntMatchTdxModule)
@@ -624,7 +633,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenTdReportMrsigne
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TDX_MODULE_MISMATCH, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenTdReportSeamAttributesDoesntMatchTdxModule)
@@ -649,7 +658,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnStatusTdxModuleMismatchWhenTdReportSeamAtt
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TDX_MODULE_MISMATCH, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnInvalidPCKCert)
@@ -661,7 +670,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnInvalidPCKCert)
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_INVALID_PCK_CERT, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnQuoteInvalidSignature)
@@ -672,7 +681,7 @@ TEST_F(QuoteV5VerifierUT, shouldReturnQuoteInvalidSignature)
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_INVALID_QUOTE_SIGNATURE, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnInvalidQeReportSignature)
@@ -684,20 +693,20 @@ TEST_F(QuoteV5VerifierUT, shouldReturnInvalidQeReportSignature)
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_INVALID_QE_REPORT_SIGNATURE, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnTcbRevokedOnLatestRevokedEqualPckTCB)
 {
     const auto quoteBin = gen.buildSgxQuote();
 
-    tcbs.insert(tcbs.begin(), TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "Revoked", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(tcbs.begin(), TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "Revoked", currentTime, {"INTEL-SA-00001"}});
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_REVOKED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, {"INTEL-SA-00001"}, "Revoked");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnConfigurationNeeded)
@@ -710,14 +719,14 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnConf
     const std::vector<uint8_t> higherPcesvn = {0xff, 0xff};
     const std::vector<uint8_t> lowerPcesvn = {0x00, 0x00};
 
-    tcbs.insert(TcbLevel{lowerCpusvn, toUint16(lowerPcesvn[1], lowerPcesvn[0]), "ConfigurationNeeded", 0, {"INTEL-SA-00001"}});
-    tcbs.insert(TcbLevel{higherCpusvn, toUint16(higherPcesvn[1], higherPcesvn[0]), "Revoked", 0, {"INTEL-SA-00002"}});
+    tcbs.insert(TcbLevel{lowerCpusvn, toUint16(lowerPcesvn[1], lowerPcesvn[0]), "ConfigurationNeeded", currentTime-2, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{higherCpusvn, toUint16(higherPcesvn[1], higherPcesvn[0]), "Revoked", currentTime-1, {"INTEL-SA-00002"}});
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, {"INTEL-SA-00001"}, "ConfigurationNeeded");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnConfigurationNeededForTcbInfoV2)
@@ -730,15 +739,15 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnConf
     const std::vector<uint8_t> higherPcesvn = {0xff, 0xff};
     const std::vector<uint8_t> lowerPcesvn = {0x00, 0x00};
 
-    tcbs.insert(TcbLevel{lowerCpusvn, toUint16(lowerPcesvn[1], lowerPcesvn[0]), "ConfigurationNeeded", 0, {"INTEL-SA-00001"}});
-    tcbs.insert(TcbLevel{higherCpusvn, toUint16(higherPcesvn[1], higherPcesvn[0]), "Revoked", 0, {"INTEL-SA-00002"}});
+    tcbs.insert(TcbLevel{lowerCpusvn, toUint16(lowerPcesvn[1], lowerPcesvn[0]), "ConfigurationNeeded", currentTime-2, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{higherCpusvn, toUint16(higherPcesvn[1], higherPcesvn[0]), "Revoked", currentTime-1, {"INTEL-SA-00002"}});
     ON_CALL(tcbInfoJson, getVersion()).WillByDefault(testing::Return(2));
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, {"INTEL-SA-00001"}, "ConfigurationNeeded");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnOutOfDateConfigurationNeeded)
@@ -751,15 +760,15 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBWhenBothSVNsAreLowerAndReturnOutO
     const std::vector<uint8_t> higherPcesvn = {0xff, 0xff};
     const std::vector<uint8_t> lowerPcesvn = {0x00, 0x00};
 
-    tcbs.insert(TcbLevel{lowerCpusvn, toUint16(lowerPcesvn[1], lowerPcesvn[0]), "OutOfDateConfigurationNeeded", 0, {"INTEL-SA-00001"}});
-    tcbs.insert(TcbLevel{higherCpusvn, toUint16(higherPcesvn[1], higherPcesvn[0]), "Revoked", 0, {"INTEL-SA-00002"}});
+    tcbs.insert(TcbLevel{lowerCpusvn, toUint16(lowerPcesvn[1], lowerPcesvn[0]), "OutOfDateConfigurationNeeded", currentTime-2, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{higherCpusvn, toUint16(higherPcesvn[1], higherPcesvn[0]), "Revoked", currentTime-1, {"INTEL-SA-00002"}});
     ON_CALL(tcbInfoJson, getVersion()).WillByDefault(testing::Return(2));
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_OUT_OF_DATE_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, {"INTEL-SA-00001"}, "OutOfDateConfigurationNeeded");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBAndReturnConfigurationNeeded)
@@ -769,8 +778,8 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBAndReturnConfigurationNeeded)
     std::vector<uint8_t> higherCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x41, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
     std::vector<uint8_t> lowerCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x40, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
 
-    auto higherTcb = TcbLevel{higherCpusvn, toUint16(pcesvn[1], pcesvn[0]), "Revoked", 0, {"INTEL-SA-00002"}};
-    auto lowerTcb = TcbLevel{lowerCpusvn, toUint16(pcesvn[1], pcesvn[0]), "ConfigurationNeeded", 0, {"INTEL-SA-00001"}};
+    auto higherTcb = TcbLevel{higherCpusvn, toUint16(pcesvn[1], pcesvn[0]), "Revoked", currentTime-1, {"INTEL-SA-00002"}};
+    auto lowerTcb = TcbLevel{lowerCpusvn, toUint16(pcesvn[1], pcesvn[0]), "ConfigurationNeeded", currentTime-2, {"INTEL-SA-00001"}};
     tcbs.insert(lowerTcb);
     tcbs.insert(higherTcb);
     EXPECT_EQ(tcbs.size(), 2);
@@ -783,7 +792,7 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBAndReturnConfigurationNeeded)
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_CONFIGURATION_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, {"INTEL-SA-00001"}, "ConfigurationNeeded");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBAndReturnConfigurationAndSwHardeningNeeded)
@@ -793,8 +802,8 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBAndReturnConfigurationAndSwHarden
     std::vector<uint8_t> higherCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x41, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
     std::vector<uint8_t> lowerCpusvn = { 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x3F, 0x3F, 0x40, 0x3F, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 };
 
-    auto higherTcb = TcbLevel{higherCpusvn, toUint16(pcesvn[1], pcesvn[0]), "Revoked", 0, {"INTEL-SA-00002"}};
-    auto lowerTcb = TcbLevel{lowerCpusvn, toUint16(pcesvn[1], pcesvn[0]), "ConfigurationAndSWHardeningNeeded", 0, {"INTEL-SA-00001"}};
+    auto higherTcb = TcbLevel{higherCpusvn, toUint16(pcesvn[1], pcesvn[0]), "Revoked", currentTime-1, {"INTEL-SA-00002"}};
+    auto lowerTcb = TcbLevel{lowerCpusvn, toUint16(pcesvn[1], pcesvn[0]), "ConfigurationAndSWHardeningNeeded", currentTime-2, {"INTEL-SA-00001"}};
     tcbs.insert(lowerTcb);
     tcbs.insert(higherTcb);
     EXPECT_EQ(tcbs.size(), 2);
@@ -807,7 +816,7 @@ TEST_F(QuoteV5VerifierUT, shouldMatchToLowerTCBAndReturnConfigurationAndSwHarden
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_CONFIGURATION_AND_SW_HARDENING_NEEDED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, {"INTEL-SA-00001"}, "ConfigurationAndSWHardeningNeeded");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnTcbNotSupportedWhenOnlyPceSvnIsHigher)
@@ -816,13 +825,13 @@ TEST_F(QuoteV5VerifierUT, shouldReturnTcbNotSupportedWhenOnlyPceSvnIsHigher)
 
     const std::vector<uint8_t> higherPcesvn = {0xff, 0xff};
 
-    tcbs.insert(tcbs.begin(), TcbLevel{cpusvn, toUint16(higherPcesvn[1], higherPcesvn[0]), "Revoked", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(tcbs.begin(), TcbLevel{cpusvn, toUint16(higherPcesvn[1], higherPcesvn[0]), "Revoked", currentTime-1, {"INTEL-SA-00001"}});
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_NOT_SUPPORTED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoEmpty();
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnTcbRevokedWhenOnlyCpuSvnIsLower)
@@ -832,13 +841,13 @@ TEST_F(QuoteV5VerifierUT, shouldReturnTcbRevokedWhenOnlyCpuSvnIsLower)
     std::vector<uint8_t> lowerCpusvn = cpusvn;
     lowerCpusvn[8]--;
 
-    tcbs.insert(tcbs.begin(), TcbLevel{lowerCpusvn, toUint16(pcesvn[1], pcesvn[0]), "Revoked", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(tcbs.begin(), TcbLevel{lowerCpusvn, toUint16(pcesvn[1], pcesvn[0]), "Revoked", currentTime-1, {"INTEL-SA-00001"}});
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_REVOKED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, {"INTEL-SA-00001"}, "Revoked");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnTcbRevokedWhenOnlyPcesvnIsLower)
@@ -847,13 +856,13 @@ TEST_F(QuoteV5VerifierUT, shouldReturnTcbRevokedWhenOnlyPcesvnIsLower)
 
     const std::vector<uint8_t> lowerPcesvn = {0x21, 0x12};
 
-    tcbs.insert(tcbs.begin(), TcbLevel{cpusvn, toUint16(lowerPcesvn[1], lowerPcesvn[0]), "Revoked", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(tcbs.begin(), TcbLevel{cpusvn, toUint16(lowerPcesvn[1], lowerPcesvn[0]), "Revoked", currentTime-1, {"INTEL-SA-00001"}});
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_REVOKED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, {"INTEL-SA-00001"}, "Revoked");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldNOTReturnTcbRevokedWhenRevokedPcesvnAndCpusvnAreLower)
@@ -865,14 +874,14 @@ TEST_F(QuoteV5VerifierUT, shouldNOTReturnTcbRevokedWhenRevokedPcesvnAndCpusvnAre
     std::vector<uint8_t> lowerPcesvn = pcesvn;
     lowerPcesvn[0]--;
 
-    tcbs.insert(TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
-    tcbs.insert(TcbLevel{lowerCpusvn, toUint16(lowerPcesvn[1], lowerPcesvn[0]), "Revoked", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime - 5});
+    tcbs.insert(TcbLevel{lowerCpusvn, toUint16(lowerPcesvn[1], lowerPcesvn[0]), "Revoked", currentTime - 8, {"INTEL-SA-00001"}});
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_OK, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime - 5, {}, "UpToDate");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnSwHardeningNeeded)
@@ -884,13 +893,13 @@ TEST_F(QuoteV5VerifierUT, shouldReturnSwHardeningNeeded)
     std::vector<uint8_t> lowerPcesvn = pcesvn;
     lowerPcesvn[0]--;
 
-    tcbs.insert(TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "SWHardeningNeeded", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "SWHardeningNeeded", currentTime-1, {"INTEL-SA-00001"}});
     EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
 
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_SW_HARDENING_NEEDED , dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-5, {"INTEL-SA-00001"}, "SWHardeningNeeded");
 }
 
 struct QeIdentityStatuses {
@@ -908,7 +917,7 @@ TEST_P(QuoteV5VerifierUTQeIdentityStatusParametrized, testAllStatuses)
     const auto quoteBin = gen.buildSgxQuote();
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
-    tcbs.insert(tcbs.begin(), TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
+    tcbs.insert(tcbs.begin(), TcbLevel{cpusvn, toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime - 5});
 
     tdxTcbComponents[1] = 0; // 0 to make sure that expected tcb levels are used. 1 would use TDX Module TCB Levels
     if (params.enclaveVerifierStatus == STATUS_OK)
@@ -916,7 +925,7 @@ TEST_P(QuoteV5VerifierUTQeIdentityStatusParametrized, testAllStatuses)
         EXPECT_CALL(tcbInfoJson, getTcbLevels()).WillOnce(testing::ReturnRef(tcbs));
     }
 
-    EXPECT_CALL(enclaveReportVerifier, verify(_, _, _)).WillOnce(Return(params.enclaveVerifierStatus));
+    EXPECT_CALL(enclaveReportVerifier, verify(_, _)).WillOnce(Return(params.enclaveVerifierStatus));
     EXPECT_CALL(enclaveIdentityV2, getStatus()).WillRepeatedly(Return(STATUS_OK));
     EXPECT_EQ(params.expectedStatus, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
 }
@@ -938,8 +947,8 @@ TEST_F(QuoteV5VerifierUT, shouldBackoffToLowerLevelBecauseTdReportTeeSvnIsOutOfD
 
     tdxTcbComponents[1] = 0; // 0 to make sure that expected tcb levels are used. 1 would use TDX Module TCB Levels
 
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0xF0)), toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "OutOfDate", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0xF0)), toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-5});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "OutOfDate", currentTime-8, {"INTEL-SA-00001"}});
 
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
     EXPECT_CALL(tcbInfoJson, getVersion()).WillRepeatedly(testing::Return(3));
@@ -949,7 +958,7 @@ TEST_F(QuoteV5VerifierUT, shouldBackoffToLowerLevelBecauseTdReportTeeSvnIsOutOfD
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_OUT_OF_DATE, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-8, {"INTEL-SA-00001"}, "OutOfDate");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldBackoffToLowerLevelBecauseNoAllSvnsAreHigher)
@@ -969,8 +978,8 @@ TEST_F(QuoteV5VerifierUT, shouldBackoffToLowerLevelBecauseNoAllSvnsAreHigher)
     tdxTcbComponents[1] = 0; // 0 to make sure that expected tcb levels are used. 1 would use TDX Module TCB Levels
     std::vector<TcbComponent> tdxComponents = {0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, tdxComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "OutOfDate", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, tdxComponents, toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-5});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, tdxTcbComponents, toUint16(pcesvn[1], pcesvn[0]), "OutOfDate", currentTime-8, {"INTEL-SA-00001"}});
 
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
     EXPECT_CALL(tcbInfoJson, getVersion()).WillRepeatedly(testing::Return(3));
@@ -980,7 +989,7 @@ TEST_F(QuoteV5VerifierUT, shouldBackoffToLowerLevelBecauseNoAllSvnsAreHigher)
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_OUT_OF_DATE, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {"INTEL-SA-00001"});
+    verificationCollateralInfo.checkVerCollInfoFilledEqual(expectedIssueDates, expectedNextUpdates, expectedEvaluationNumbers, currentTime-8, {"INTEL-SA-00001"}, "OutOfDate");
 }
 
 TEST_F(QuoteV5VerifierUT, shouldReturnTcbNotSupportedIfNotMatchingTcbLevelIsFoundBecauseOfTDXSvnComponents)
@@ -998,8 +1007,8 @@ TEST_F(QuoteV5VerifierUT, shouldReturnTcbNotSupportedIfNotMatchingTcbLevelIsFoun
                                                                        gen.getTdReport10().bytes(), *privKey);
     const auto quoteBin = gen.buildTdx10Quote();
 
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0xF0)), toUint16(pcesvn[1], pcesvn[0]), "UpToDate"});
-    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0x60)), toUint16(pcesvn[1], pcesvn[0]), "OutOfDate", 0, {"INTEL-SA-00001"}});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0xF0)), toUint16(pcesvn[1], pcesvn[0]), "UpToDate", currentTime-5});
+    tcbs.insert(TcbLevel{"TDX", sgxTcbComponents, std::vector<TcbComponent>(16, TcbComponent(0x60)), toUint16(pcesvn[1], pcesvn[0]), "OutOfDate", currentTime-8, {"INTEL-SA-00001"}});
 
     EXPECT_CALL(tcbInfoJson, getId()).WillRepeatedly(testing::Return("TDX"));
     EXPECT_CALL(tcbInfoJson, getVersion()).WillRepeatedly(testing::Return(3));
@@ -1009,16 +1018,22 @@ TEST_F(QuoteV5VerifierUT, shouldReturnTcbNotSupportedIfNotMatchingTcbLevelIsFoun
     dcap::Quote quote;
     ASSERT_TRUE(quote.parse(quoteBin));
     EXPECT_EQ(STATUS_TCB_NOT_SUPPORTED, dcap::QuoteVerifier{}.verify(quote, pck, crl, tcbInfoJson, &enclaveIdentityV2, enclaveReportVerifier, verificationCollateralInfo));
-    checkVerCollInfoFilled({0}, {});
+    verificationCollateralInfo.checkVerCollInfoEmpty();
 }
 
 INSTANTIATE_TEST_SUITE_P(AllStatutes,
                         QuoteV5VerifierUTQeIdentityStatusParametrized,
                         testing::Values(
                                 QeIdentityStatuses{STATUS_OK, STATUS_OK},
+                                QeIdentityStatuses{STATUS_SGX_ENCLAVE_REPORT_UNSUPPORTED_FORMAT, STATUS_UNSUPPORTED_QUOTE_FORMAT},
+                                QeIdentityStatuses{STATUS_SGX_ENCLAVE_IDENTITY_UNSUPPORTED_FORMAT, STATUS_UNSUPPORTED_QE_IDENTITY_FORMAT},
+                                QeIdentityStatuses{STATUS_SGX_ENCLAVE_IDENTITY_INVALID, STATUS_UNSUPPORTED_QE_IDENTITY_FORMAT},
+                                QeIdentityStatuses{STATUS_SGX_ENCLAVE_IDENTITY_UNSUPPORTED_VERSION, STATUS_UNSUPPORTED_QE_IDENTITY_FORMAT},
                                 QeIdentityStatuses{STATUS_SGX_ENCLAVE_REPORT_MISCSELECT_MISMATCH, STATUS_QE_IDENTITY_MISMATCH},
                                 QeIdentityStatuses{STATUS_SGX_ENCLAVE_REPORT_ATTRIBUTES_MISMATCH, STATUS_QE_IDENTITY_MISMATCH},
                                 QeIdentityStatuses{STATUS_SGX_ENCLAVE_REPORT_MRSIGNER_MISMATCH, STATUS_QE_IDENTITY_MISMATCH},
                                 QeIdentityStatuses{STATUS_SGX_ENCLAVE_REPORT_ISVPRODID_MISMATCH, STATUS_QE_IDENTITY_MISMATCH},
-                                QeIdentityStatuses{STATUS_SGX_ENCLAVE_REPORT_ISVSVN_OUT_OF_DATE, STATUS_TCB_OUT_OF_DATE}
+                                QeIdentityStatuses{STATUS_SGX_ENCLAVE_REPORT_ISVSVN_REVOKED, STATUS_OK}, // it should not cause quote verification failure at this step. ISVSVN evaluation is expected to be done at the end of TCB evaluation process, after matching the TCB level
+                                QeIdentityStatuses{STATUS_SGX_ENCLAVE_REPORT_ISVSVN_OUT_OF_DATE, STATUS_OK}, // it should not cause quote verification failure at this step. ISVSVN evaluation is expected to be done at the end of TCB evaluation process, after matching the TCB level
+                                QeIdentityStatuses{STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED, STATUS_OK} // it should not cause quote verification failure at this step. ISVSVN evaluation is expected to be done at the end of TCB evaluation process, after matching the TCB level
                         ));

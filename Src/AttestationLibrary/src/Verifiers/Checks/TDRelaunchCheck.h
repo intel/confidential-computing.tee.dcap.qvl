@@ -55,11 +55,7 @@ inline std::vector<uint8_t> tcbComponentsToVectorOfBytes(const std::vector<TcbCo
 }
 #endif //SGX_LOGS
 
-Status checkForRelaunch(const std::array<uint8_t, 16> &tdReport, const TcbInfo &tcbInfo,
-                        Status sgxTcbStatus,
-                        Status tdxTcbStatus,
-                        Status tdxModuleTcbStatus,
-                        Optional<Status> qeTcbStatus);
+Status checkForRelaunch(Status launchTcbStatus, Status currentTcbStatus);
 
 }
 

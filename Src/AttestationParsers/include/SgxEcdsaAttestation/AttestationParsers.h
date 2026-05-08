@@ -391,12 +391,14 @@ namespace intel { namespace sgx { namespace dcap { namespace parser
              *          - OutOfDate
              *          - OutOfDateConfigurationNeeded
              *          - Revoked
+             * @param tcbDate - TCB Date associated with given TCB
              * @return the value for given component
              *
              */
             TcbLevel(const std::vector<uint8_t>& cpuSvnComponents,
                      uint32_t pceSvn,
-                     const std::string& status);
+                     const std::string& status,
+                     const std::time_t& tcbDate);
 
             /**
              * Creates TCB Level object with provided data
@@ -441,7 +443,7 @@ namespace intel { namespace sgx { namespace dcap { namespace parser
                      const std::vector<TcbComponent>& tdxTcbComponents,
                      const uint32_t pceSvn,
                      const std::string& status,
-                     const std::time_t tcbDate = 0,
+                     const std::time_t tcbDate,
                      std::vector<std::string> advisoryIDs = {});
 
             virtual ~TcbLevel() = default;
@@ -531,7 +533,8 @@ namespace intel { namespace sgx { namespace dcap { namespace parser
         private:
             std::string _id;
             TcbInfo::Version _version = TcbInfo::Version::V2;
-            std::vector<uint8_t> _cpuSvnComponents; // backward compatibility
+            std::vector<uint8_t> _cpuSvn; // backward compatibility
+            std::vector<TcbComponent> _cpuSvnComponents; // forward compatibility
             std::vector<TcbComponent> _sgxTcbComponents;
             std::vector<TcbComponent> _tdxTcbComponents;
             uint32_t _pceSvn;
@@ -696,7 +699,7 @@ namespace intel { namespace sgx { namespace dcap { namespace parser
              */
             static EnclaveIdentity parse(const std::string& jsonString);
 
-        private:
+        protected:
             EnclaveID _id;
             uint32_t _version;
             time_t _issueDate;
@@ -731,7 +734,7 @@ namespace intel { namespace sgx { namespace dcap { namespace parser
             virtual TcbStatus getTcbStatus() const;
             virtual const std::vector<std::string>& getAdvisoryIds() const;
 
-        private:
+        protected:
             uint32_t _isvSvn;
             time_t _tcbDate;
             TcbStatus _tcbStatus;

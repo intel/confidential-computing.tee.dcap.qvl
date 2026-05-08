@@ -44,8 +44,35 @@ public:
     std::vector<time_t> getIssueDates() const { return _issueDates; }
     std::vector<time_t> getNextUpdates() const { return _nextUpdates; }
     std::vector<unsigned int> getTcbEvalNumbers() const { return _tcbEvalNumbers; }
-    std::vector<time_t> getTcbDates() const { return _tcbDates; }
-    std::set<std::string> getAdvisoryIds() const { return _advisoryIds; }
+    std::time_t getLaunchTcbDate() const { return _launchTcbDate; }
+    std::time_t getCurrentTcbDate() const { return _currentTcbDate; }
+    std::set<std::string> getLaunchAdvisoryIds() const { return _launchAdvisoryIds; }
+    std::set<std::string> getCurrentAdvisoryIds() const { return _currentAdvisoryIds; }
+    std::string getLaunchTcbStatus() const { return _launchTcbStatus; }
+    std::string getCurrentTcbStatus() const { return _currentTcbStatus; }
+
+    void checkVerCollInfoEmpty() const;
+
+    /**
+     * For the cases when launch and current data should be the same
+     */
+    void checkVerCollInfoFilledEqual(
+        const std::vector<time_t>& expectedIssueDates,
+        const std::vector<time_t>& expectedNextUpdates,
+        const std::vector<unsigned int> &expectedEvaluationNumbers,
+        const std::time_t& tcbDate,
+        const std::set<std::string>& advisoryIds,
+        const std::string& tcbStatus) const;
+    void checkVerCollInfoFilled(
+        const std::vector<time_t>& expectedIssueDates,
+        const std::vector<time_t>& expectedNextUpdates,
+        const std::vector<unsigned int> &expectedEvaluationNumbers,
+        const std::time_t& launchTcbDate,
+        const std::time_t& currentTcbDate,
+        const std::set<std::string>& launchAdvisoryIds,
+        const std::set<std::string>& currentAdvisoryIds,
+        const std::string& launchTcbStatus,
+        const std::string& currentTcbStatus) const;
 };
 
 }}}}

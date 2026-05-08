@@ -377,7 +377,8 @@ Status sgxAttestationVerifyQuoteEx(const uint8_t* rawQuote, uint32_t quoteSize, 
     const std::vector<uint8_t> vecQuote(rawQuote, std::next(rawQuote, static_cast<std::ptrdiff_t>(quoteSize)));
 
     /// 4.1.2.5.2
-    if (verificationCollateralInfo && verificationCollateralInfoSize < ::constants::VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN)
+    if ((verificationCollateralInfo == nullptr && verificationCollateralInfoSize != 0) ||
+        (verificationCollateralInfo && verificationCollateralInfoSize < ::constants::VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN))
     {
         return STATUS_INVALID_PARAMETER;
     }
@@ -445,7 +446,7 @@ Status sgxAttestationVerifyQuoteEx(const uint8_t* rawQuote, uint32_t quoteSize, 
         const auto status = dcap::QuoteVerifier{}.verify(quote, pckCert, pckCrlStore, tcbInfo, enclaveIdentity.get(), dcap::EnclaveReportVerifier(), verCollInfoDataObj);
 
         /// 4.1.2.5.19
-        if(verificationCollateralInfo && !verCollInfoDataObj.isError())
+        if(verificationCollateralInfo && verCollInfoDataObj.isFilled())
         {
             std::vector<uint8_t> verCollInfoVec = verCollInfoDataObj.aggregateDataAndParseToVec();
             std::memcpy(verificationCollateralInfo, verCollInfoVec.data(), verificationCollateralInfoSize);

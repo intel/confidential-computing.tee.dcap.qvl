@@ -384,6 +384,17 @@ const std::array<uint8_t, 16> &Quote::getTeeTcbSvn() const {
     }
 }
 
+const std::array<uint8_t, 16>& Quote::getTeeTcbSvn2() const
+{
+    switch (getBody().bodyType) {
+        case constants::BODY_TD_REPORT15_TYPE:
+            return getTdReport15().teeTcbSvn2;
+        case constants::BODY_TD_REPORT15EX_TYPE:
+        default:
+            return getTdReport15Ex().teeTcbSvn2;
+    }
+}
+
 const std::array<uint8_t, 48>& Quote::getMrSignerSeam() const
 {
     if (header.version == QUOTE_VERSION_4)

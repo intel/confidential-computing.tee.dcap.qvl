@@ -33,39 +33,31 @@
 #define SGXECDSAATTESTATION_TCBSTATUS_H
 
 #include <string>
-#include <set>
-#include <map>
+#include <unordered_map>
+#include <stdexcept>
+
 #include "SgxEcdsaAttestation/AttestationParsers.h"
 
 namespace intel::sgx::dcap::parser::json {
 
     inline TcbStatus parseStringToTcbStatus(const std::string& status)
     {
-        if (status == "UpToDate")
-        {
-            return TcbStatus::UpToDate;
-        }
-        else if (status == "ConfigurationNeeded")
-        {
-            return TcbStatus::ConfigurationNeeded;
-        }
-        else if (status == "OutOfDate")
-        {
-            return TcbStatus::OutOfDate;
-        }
-        else if (status == "OutOfDateConfigurationNeeded")
-        {
-            return TcbStatus::OutOfDateConfigurationNeeded;
-        }
-        else if (status == "Revoked")
-        {
-            return TcbStatus::Revoked;
-        }
-        else
-        {
+        // Constructed once, reused on subsequent calls (since C++11, thread-safe init)
+        static const std::unordered_map<std::string, TcbStatus> kMap{
+            {"UpToDate", TcbStatus::UpToDate},
+            {"ConfigurationNeeded", TcbStatus::ConfigurationNeeded},
+            {"OutOfDate", TcbStatus::OutOfDate},
+            {"OutOfDateConfigurationNeeded", TcbStatus::OutOfDateConfigurationNeeded},
+            {"Revoked", TcbStatus::Revoked},
+        };
+
+        const auto it = kMap.find(status);
+        if (it == kMap.end())
             throw std::runtime_error("Cannot parse TCB status - unknown value");
-        }
+
+        return it->second;
     }
-}
+
+} // namespace intel::sgx::dcap::parser::json
 
 #endif //SGXECDSAATTESTATION_TCBSTATUS_H

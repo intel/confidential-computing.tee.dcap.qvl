@@ -42,8 +42,7 @@
 namespace intel { namespace sgx { namespace dcap {
 
 Status EnclaveReportVerifier::verify(const parser::json::EnclaveIdentity *enclaveIdentity,
-                                     const EnclaveReport& enclaveReport,
-                                     VerificationCollateralInfo *verificationCollateralInfo) const
+                                     const EnclaveReport& enclaveReport) const
 {
     const auto miscselectMask = vectorToUint32(enclaveIdentity->getMiscselectMask());
     const auto miscselect = vectorToUint32(enclaveIdentity->getMiscselect());
@@ -92,11 +91,6 @@ Status EnclaveReportVerifier::verify(const parser::json::EnclaveIdentity *enclav
         auto enclaveIdentityStatus = matchedTcbLevel.getTcbStatus();
 
         /// 4.1.2.5.19
-        if(verificationCollateralInfo != nullptr)
-        {
-            verificationCollateralInfo->addEnclaveIdentityData(*enclaveIdentity, matchedTcbLevel);
-        }
-
         if (enclaveIdentityStatus != parser::json::TcbStatus::UpToDate)
         {
             if (enclaveIdentityStatus == parser::json::TcbStatus::Revoked)
@@ -112,10 +106,6 @@ Status EnclaveReportVerifier::verify(const parser::json::EnclaveIdentity *enclav
     }
     catch (const parser::json::StatusNotSupportedException &e)
     {
-        if (verificationCollateralInfo)
-        {
-            verificationCollateralInfo->setError();
-        }
         return STATUS_SGX_ENCLAVE_REPORT_ISVSVN_NOT_SUPPORTED;
     }
 
