@@ -152,6 +152,7 @@ bool areSvnsHigherOrEqual(const std::vector<uint8_t>& tcbComponents,
     return true;
 }
 
+#ifdef SGX_LOGS
 // Helper function to safely get evaluation status string
 static inline std::string getEvaluationStatusString(const EvaluationStatus status)
 {
@@ -162,6 +163,7 @@ static inline std::string getEvaluationStatusString(const EvaluationStatus statu
     }
     return "Unknown";
 }
+#endif
 
 // Applies QE identity TCB level lookup and appends results to componentStatuses, tcbDates, and qeAdvisoryIds.
 // throws StatusNotSupportedException if no TCB level found for the given QE SVN

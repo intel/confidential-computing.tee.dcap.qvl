@@ -366,6 +366,11 @@ const std::array<uint8_t, constants::ECDSA_SIGNATURE_BYTE_LEN> &Quote::getQuoteS
 }
 
 const std::array<uint8_t, 16> &Quote::getTeeTcbSvn() const {
+    static const std::array<uint8_t, 16> empty{};
+    if (header.version < QUOTE_VERSION_4)
+    {
+        return empty;
+    }
     if (header.version == QUOTE_VERSION_4)
     {
         return tdReport10.teeTcbSvn;

@@ -68,7 +68,7 @@ Status checkTcbLevel(const TcbInfo &tcbInfo, const parser::x509::PckCertificate 
     /// 4.1.2.5.19
     else if (quote.getHeader().teeType == dcap::constants::TEE_TYPE_TDX)
     {
-        const auto teeTcbSvn = std::vector(quote.getTeeTcbSvn().begin(), quote.getTeeTcbSvn().end());
+        const auto teeTcbSvn = std::vector<uint8_t>(quote.getTeeTcbSvn().begin(), quote.getTeeTcbSvn().end());
         LOG_INFO("TD Report - TdxSvn: {}", bytesToHexString(teeTcbSvn));
         const auto evaluationStatus = tdxEvaluateTCB(pckCert.getTcb().getSgxTcbComponents(),
                                                      pckCert.getTcb().getPceSvn(),
@@ -92,7 +92,7 @@ Status checkTcbLevel(const TcbInfo &tcbInfo, const parser::x509::PckCertificate 
             std::vector<std::string> currentAdvisoryIds;
 
             /// 4.1.2.5.1.20.1
-            const auto teeTcbSvn2 = std::vector(quote.getTeeTcbSvn2().begin(), quote.getTeeTcbSvn2().end());
+            const auto teeTcbSvn2 = std::vector<uint8_t>(quote.getTeeTcbSvn2().begin(), quote.getTeeTcbSvn2().end());
             LOG_INFO("TD Report - TdxSvn2: {}", bytesToHexString(teeTcbSvn2));
             const auto evaluationStatus2 = tdxEvaluateTCB(pckCert.getTcb().getSgxTcbComponents(),
                                                          pckCert.getTcb().getPceSvn(),

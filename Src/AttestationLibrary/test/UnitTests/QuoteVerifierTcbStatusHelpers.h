@@ -99,6 +99,7 @@ class QuoteTest : public Quote
 public:
     explicit QuoteTest(std::array<uint8_t, 16> teeTcbSvn, std::array<uint8_t, 16> teeTcbSvn2, uint16_t qeSvn)
     {
+        header.version = constants::QUOTE_VERSION_5;
         header.teeType = constants::TEE_TYPE_TDX;
         body.bodyType = dcap::constants::BODY_TD_REPORT15_TYPE;
         tdReport15.teeTcbSvn = teeTcbSvn;
