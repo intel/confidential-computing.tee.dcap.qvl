@@ -187,8 +187,15 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU
 				)
         # implicit-conversion: Checks for suspicious behavior of implicit conversions. Enables implicit-unsigned-integer-truncation, implicit-signed-integer-truncation, and implicit-integer-sign-change.
 		# nullability: Enables nullability-arg, nullability-assign, and nullability-return. While violating nullability does not have undefined behavior, it is often unintentional, so UBSan offers to catch it.
-		if(NOT DEFINED SANITIZER_FLAGS_DEBUG_CLANG)
-            set(SANITIZER_FLAGS_DEBUG_CLANG "-fsanitize=undefined,safe-stack,implicit-conversion,nullability")
+		if(NOT DEFINED SANITIZER_FLAGS_DEBUG_CLANG AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set(SANITIZER_FLAGS_DEBUG_CLANG "-fsanitize=undefined,implicit-conversion,nullability -shared-libsan")
+			# Embed clang's runtime library path so the shared UBSan runtime is found at load time
+			execute_process(COMMAND ${CMAKE_CXX_COMPILER} --print-runtime-dir
+				OUTPUT_VARIABLE CLANG_RUNTIME_DIR OUTPUT_STRIP_TRAILING_WHITESPACE
+				RESULT_VARIABLE _clang_runtime_result ERROR_QUIET)
+			if(_clang_runtime_result EQUAL 0 AND CLANG_RUNTIME_DIR)
+				list(APPEND CMAKE_BUILD_RPATH "${CLANG_RUNTIME_DIR}")
+			endif()
         endif()
 		if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "7.0")
 			list(APPEND CMAKE_CXX_FLAGS_CLANG "-fcf-protection")
