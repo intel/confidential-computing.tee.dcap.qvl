@@ -31,9 +31,9 @@
 
 #include "StatusPrinter.h"
 #include <array>
+#include <map>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 
 namespace intel::sgx::dcap {
 
@@ -158,7 +158,7 @@ std::string printStatusOnly(const Status s)
     return statusStrs[s];
 }
 
-std::unordered_map<Status, std::string> STATUS_TO_TCB_STRING_MAP = {
+std::map<Status, std::string> STATUS_TO_TCB_STRING_MAP = {
     { STATUS_OK, "UpToDate" },
     { STATUS_TCB_OUT_OF_DATE, "OutOfDate" },
     { STATUS_TCB_REVOKED, "Revoked" },

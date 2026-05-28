@@ -32,6 +32,7 @@
 #include "EvaluateTcb.h"
 
 #include <array>
+#include <map>
 #include <unordered_map>
 #include <algorithm> // std::min_element, max_element for windows
 
@@ -59,7 +60,7 @@ enum class EvaluationStatus
     TdRelaunchAdvisedConfigurationNeeded,
 };
 
-static const std::unordered_map<EvaluationStatus, Status> EVALUATION_STATUS_TO_STATUS_MAP = {
+static const std::map<EvaluationStatus, Status> EVALUATION_STATUS_TO_STATUS_MAP = {
     { EvaluationStatus::NotSupported, STATUS_TCB_NOT_SUPPORTED },
     { EvaluationStatus::UpToDate, STATUS_OK },
     { EvaluationStatus::OutOfDate, STATUS_TCB_OUT_OF_DATE },
@@ -72,7 +73,7 @@ static const std::unordered_map<EvaluationStatus, Status> EVALUATION_STATUS_TO_S
     { EvaluationStatus::TdRelaunchAdvisedConfigurationNeeded, STATUS_TCB_TD_RELAUNCH_ADVISED_CONFIGURATION_NEEDED }
 };
 
-static const std::unordered_map<TcbStatus, EvaluationStatus> VALID_QE_STATUSES = {
+static const std::map<TcbStatus, EvaluationStatus> VALID_QE_STATUSES = {
     { TcbStatus::UpToDate, EvaluationStatus::UpToDate },
     { TcbStatus::OutOfDate, EvaluationStatus::OutOfDate },
     { TcbStatus::ConfigurationNeeded, EvaluationStatus::ConfigurationNeeded },
@@ -90,7 +91,7 @@ static const std::unordered_map<std::string, EvaluationStatus> VALID_TCB_INFO_ST
     { "ConfigurationAndSWHardeningNeeded", EvaluationStatus::ConfigurationAndSWHardeningNeeded }
 };
 
-static const std::unordered_map<EvaluationStatus, std::string> EVALUATION_STATUS_TO_STRING = {
+static const std::map<EvaluationStatus, std::string> EVALUATION_STATUS_TO_STRING = {
     { EvaluationStatus::UpToDate, "UpToDate" },
     { EvaluationStatus::OutOfDate, "OutOfDate" },
     { EvaluationStatus::ConfigurationNeeded, "ConfigurationNeeded" },
