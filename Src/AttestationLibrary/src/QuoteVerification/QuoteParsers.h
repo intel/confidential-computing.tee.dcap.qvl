@@ -45,7 +45,7 @@ inline bool copyAndAdvance(T &val, std::vector<uint8_t>::const_iterator &from, s
     if (available < 0 || (unsigned) available < amount) {
         return false;
     }
-    const auto end = std::next(from, static_cast<long>(amount));
+    const auto end = std::next(from, static_cast<std::ptrdiff_t>(amount));
     return val.insert(from, end);
 }
 
