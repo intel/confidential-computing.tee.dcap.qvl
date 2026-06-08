@@ -965,3 +965,22 @@ TEST_F(TdxTcbInfoV3UT, shouldFailWhenTdxTcbInfoTdxModuleIdentitiesTcbLevelsField
         EXPECT_EQ(std::string(err.what()), "TDX Module Identity JSON should have a [tcbLevels] field");
     }
 }
+
+TEST_F(TdxTcbInfoV3UT, shouldFailWhenTdxModuleTcbLevelIsNotAnObject)
+{
+    // tcbLevels contains a non-object element (an integer); calling HasMember on it
+    // is undefined behaviour in RapidJSON unless IsObject() is checked first.
+    auto tcbInfoJson = TcbInfoGenerator::generateTdxTcbInfo(
+            validTdxTcbInfoV3Template,
+            TcbInfoGenerator::generateTcbLevelV3(validTcbLevelV3Template, validTdxTcbV3),
+            TcbInfoGenerator::generateTdxModuleIdentities(validTdxModuleIdentitiesTemplate, "42"));
+
+    try {
+        parser::json::TcbInfo::parse(tcbInfoJson);
+        FAIL() << "Parser should throw";
+    }
+    catch(const parser::FormatException &err)
+    {
+        EXPECT_EQ(std::string(err.what()), "TDX Module TCB level should be a JSON object");
+    }
+}

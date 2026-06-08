@@ -47,6 +47,11 @@ TdxModuleTcbLevel::TdxModuleTcbLevel(const ::rapidjson::Value& tdxModuleTcbLevel
     JsonParser jsonParser;
     auto status = JsonParser::Missing;
 
+    if(!tdxModuleTcbLevel.IsObject())
+    {
+        LOG_AND_THROW(FormatException, "TDX Module TCB level should be a JSON object");
+    }
+
     if(!tdxModuleTcbLevel.HasMember("tcb"))
     {
         LOG_AND_THROW(FormatException, "TDX Module TCB level JSON should have [tcb] field");
