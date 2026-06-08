@@ -81,7 +81,13 @@ crypto::EVP_PKEY_uptr rawToP256PubKey(const std::array<uint8_t, 64>& rawKey)
 
 crypto::EVP_PKEY_uptr rawToP256PubKey(const std::vector<uint8_t>& rawKey)
 {
-    std::array<uint8_t, 64> raw{};
+    // Uncompressed P-256 point: 1 header byte (0x04) followed by raw X||Y (64 bytes).
+    constexpr size_t RAW_XY_BYTES = 64; // P-256 X and Y coordinate bytes (no header)
+    if (rawKey.size() != 1 + RAW_XY_BYTES || rawKey[0] != POINT_CONVERSION_UNCOMPRESSED)
+    {
+        return crypto::make_unique<EVP_PKEY>(nullptr); // empty key
+    }
+    std::array<uint8_t, RAW_XY_BYTES> raw{};
     std::copy_n(rawKey.begin() + 1, raw.size(), raw.begin()); // skip header byte
 
     return rawToP256PubKey(raw);

@@ -66,4 +66,53 @@ TEST(keyUtilsTest, rawTo256EcdsaKeyShouldReturnCorrectKey)
 
     // THEN
     EXPECT_TRUE(dcap::DigestUtils::verifySig(sig, data, *newPbKey));
-} 
+}
+
+TEST(keyUtilsTest, rawToP256PubKeyVecShouldReturnNullForEmptyVector)
+{
+    // GIVEN
+    const std::vector<uint8_t> empty{};
+
+    // WHEN
+    const auto key = dcap::crypto::rawToP256PubKey(empty);
+
+    // THEN: must not crash and must return null (empty key)
+    EXPECT_EQ(nullptr, key);
+}
+
+TEST(keyUtilsTest, rawToP256PubKeyVecShouldReturnNullForTooShortVector)
+{
+    // GIVEN: 64 bytes — one byte short of the required 65 (header + X + Y)
+    const std::vector<uint8_t> tooShort(64, 0x04);
+
+    // WHEN
+    const auto key = dcap::crypto::rawToP256PubKey(tooShort);
+
+    // THEN
+    EXPECT_EQ(nullptr, key);
+}
+
+TEST(keyUtilsTest, rawToP256PubKeyVecShouldReturnNullForTooLongVector)
+{
+    // GIVEN: 66 bytes — one byte over the required 65; exact size must be enforced
+    const std::vector<uint8_t> tooLong(66, 0x04);
+
+    // WHEN
+    const auto key = dcap::crypto::rawToP256PubKey(tooLong);
+
+    // THEN
+    EXPECT_EQ(nullptr, key);
+}
+
+TEST(keyUtilsTest, rawToP256PubKeyVecShouldReturnNullForWrongHeaderByte)
+{
+    // GIVEN: 65 bytes with compressed-form header (0x02) instead of uncompressed (0x04)
+    std::vector<uint8_t> compressedForm(65, 0x00);
+    compressedForm[0] = 0x02; // compressed point prefix — must be rejected
+
+    // WHEN
+    const auto key = dcap::crypto::rawToP256PubKey(compressedForm);
+
+    // THEN
+    EXPECT_EQ(nullptr, key);
+}
