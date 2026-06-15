@@ -48,7 +48,7 @@ bool JsonParser::parse(const std::string& json)
     {
         return false;
     }
-    jsonDocument.Parse(json.c_str());
+    jsonDocument.Parse<rapidjson::kParseIterativeFlag>(json.c_str());
     return !jsonDocument.HasParseError() && jsonDocument.IsObject();
 }
 

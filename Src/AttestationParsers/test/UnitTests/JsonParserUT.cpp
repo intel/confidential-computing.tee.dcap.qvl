@@ -259,3 +259,17 @@ TEST_F(JsonParserTests, getIntFieldOfShouldThrowFormatExceptionWhenParentIsNotAn
         EXPECT_EQ("Fields can only be get from objects. Parent should be an object", std::string(ex.what()));
     }
 }
+
+TEST_F(JsonParserTests, shouldParseDeeplyNestedJsonWithoutStackOverflow)
+{
+    // Recursive-descent parsers can overflow the call stack on deeply nested input.
+    // kParseIterativeFlag must be used so nesting depth only consumes heap, not stack.
+    const int depth = 1000;
+    std::string json;
+    for (int i = 0; i < depth; ++i) json += R"({"a":)";
+    json += "1";
+    for (int i = 0; i < depth; ++i) json += "}";
+
+    // The outermost value is an object so parse() should return true.
+    EXPECT_TRUE(jsonParser.parse(json));
+}
