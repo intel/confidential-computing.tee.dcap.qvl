@@ -44,6 +44,12 @@
 
 namespace intel { namespace sgx { namespace dcap { namespace parser { namespace json {
 
+namespace {
+
+constexpr unsigned int MAX_ENCLAVE_IDENTITY_JSON_DEPTH = 32;
+
+} // anonymous namespace
+
 EnclaveID EnclaveIdentity::getID() const
 {
     return _id;
@@ -259,6 +265,11 @@ EnclaveIdentity::EnclaveIdentity(const std::string& jsonString)
     if(_identityTcbLevels.empty())
     {
         LOG_AND_THROW(InvalidExtensionException, "Number of parsed [tcbLevels] should not be 0");
+    }
+
+    if(!isWithinJsonDepthLimit(*enclaveIdentity, MAX_ENCLAVE_IDENTITY_JSON_DEPTH))
+    {
+        LOG_AND_THROW(InvalidExtensionException, "[enclaveIdentity] field of EnclaveIdentity JSON is nested too deeply");
     }
 
     rapidjson::StringBuffer buffer;

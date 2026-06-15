@@ -38,9 +38,47 @@
 
 #include <tuple>
 #include <algorithm>
+#include <utility>
+#include <vector>
 #include <SgxEcdsaAttestation/AttestationParsers.h>
 
 namespace intel { namespace sgx { namespace dcap { namespace parser { namespace json {
+
+bool isWithinJsonDepthLimit(const ::rapidjson::Value& value, unsigned int maxDepth)
+{
+    std::vector<std::pair<const ::rapidjson::Value*, unsigned int>> stack;
+    stack.emplace_back(&value, 1u);
+    while (!stack.empty())
+    {
+        const ::rapidjson::Value* node = stack.back().first;
+        const unsigned int depth = stack.back().second;
+        stack.pop_back();
+
+        if (node->IsObject())
+        {
+            if (node->MemberCount() > 0 && depth >= maxDepth)
+            {
+                return false;
+            }
+            for (auto it = node->MemberBegin(); it != node->MemberEnd(); ++it)
+            {
+                stack.emplace_back(&it->value, depth + 1);
+            }
+        }
+        else if (node->IsArray())
+        {
+            if (!node->Empty() && depth >= maxDepth)
+            {
+                return false;
+            }
+            for (auto it = node->Begin(); it != node->End(); ++it)
+            {
+                stack.emplace_back(&(*it), depth + 1);
+            }
+        }
+    }
+    return true;
+}
 
 bool JsonParser::parse(const std::string& json)
 {

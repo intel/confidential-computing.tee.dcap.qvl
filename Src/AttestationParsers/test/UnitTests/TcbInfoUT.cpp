@@ -1310,3 +1310,39 @@ TEST_F(TcbInfoUT, shouldFailWhenAdvisoryIdIsNotString)
     }
 
 }
+
+TEST_F(TcbInfoUT, shouldFailWhenTcbInfoIsNestedTooDeeply)
+{
+    // A deeply-nested [tcbInfo] body must be rejected before it reaches the
+    // recursive rapidjson Accept() serialisation, which would otherwise exhaust
+    // the call stack (CWE-674) on attacker-controlled input - and does so before
+    // the signature over the body is ever verified. Inject an extra member into
+    // the tcbInfo object whose value nests far beyond the accepted depth limit.
+    // The depth chosen is well above the limit (so the guard trips
+    // deterministically) yet far below what would actually overflow the test
+    // process stack (so the test itself never crashes, with or without the fix).
+    const unsigned int depth = 1000;
+    std::string deeplyNested;
+    deeplyNested.reserve(static_cast<size_t>(depth) * 2 + 16);
+    deeplyNested += R"("deeplyNested": )";
+    for (unsigned int i = 0; i < depth; ++i) deeplyNested += "[";
+    for (unsigned int i = 0; i < depth; ++i) deeplyNested += "]";
+
+    const std::string nestedTcbInfoV2Template = R"json({
+        "tcbInfo": {
+            "version": 2,
+            "issueDate": "2017-10-04T11:10:45Z",
+            "nextUpdate": "2018-06-21T12:36:02Z",
+            "fmspc": "0192837465AF",
+            "pceId": "0000",
+            "tcbType": 0,
+            "tcbEvaluationDataNumber": 1,
+            )json" + deeplyNested + R"json(,
+            "tcbLevels": [%s]
+        },
+        %s})json";
+
+    const auto tcbInfoJson = TcbInfoGenerator::generateTcbInfo(nestedTcbInfoV2Template);
+
+    EXPECT_THROW(parser::json::TcbInfo::parse(tcbInfoJson), parser::InvalidExtensionException);
+}

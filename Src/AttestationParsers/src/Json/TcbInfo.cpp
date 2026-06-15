@@ -46,6 +46,12 @@ namespace intel { namespace sgx { namespace dcap { namespace parser { namespace 
 const std::string TcbInfo::SGX_ID = "SGX";
 const std::string TcbInfo::TDX_ID = "TDX";
 
+namespace {
+
+constexpr unsigned int MAX_TCB_INFO_JSON_DEPTH = 32;
+
+} // anonymous namespace
+
 TcbInfo TcbInfo::parse(const std::string& json)
 {
     return TcbInfo(json);
@@ -314,6 +320,11 @@ TcbInfo::TcbInfo(const std::string& jsonString)
     if(_tcbLevels.empty())
     {
         LOG_AND_THROW(InvalidExtensionException, "Number of parsed [tcbLevels] should not be 0");
+    }
+
+    if(!isWithinJsonDepthLimit(*tcbInfo, MAX_TCB_INFO_JSON_DEPTH))
+    {
+        LOG_AND_THROW(InvalidExtensionException, "[tcbInfo] field of TCB info JSON is nested too deeply");
     }
 
     rapidjson::StringBuffer buffer;

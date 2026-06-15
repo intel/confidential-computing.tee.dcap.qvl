@@ -1689,3 +1689,32 @@ TEST_F(EnclaveIdentityUT, shouldFailWhenTcbLevelIsInvalidType)
     auto json = enclaveIdentityJsonWithSignature(qeidTemplate);
     ASSERT_THROW(EnclaveIdentity::parse(json), parser::FormatException);
 }
+
+TEST_F(EnclaveIdentityUT, shouldFailWhenEnclaveIdentityIsNestedTooDeeply)
+{
+    // A deeply-nested [enclaveIdentity] body must be rejected before it reaches
+    // the recursive rapidjson Accept() serialisation, which would otherwise
+    // exhaust the call stack (CWE-674) on attacker-controlled input - and does
+    // so before the signature over the body is ever verified. Inject an extra
+    // member into the enclaveIdentity object whose value nests far beyond the
+    // accepted depth limit. The depth chosen is well above the limit (so the
+    // guard trips deterministically) yet far below what would actually overflow
+    // the test process stack (so the test itself never crashes, with or without
+    // the fix).
+    const unsigned int depth = 1000;
+    std::string deeplyNested;
+    deeplyNested.reserve(static_cast<size_t>(depth) * 2 + 32);
+    deeplyNested += R"("deeplyNested":)";
+    for (unsigned int i = 0; i < depth; ++i) deeplyNested += "[";
+    for (unsigned int i = 0; i < depth; ++i) deeplyNested += "]";
+
+    // Splice the extra member into the otherwise-valid enclaveIdentity object
+    // body, right after its opening brace.
+    std::string body = EnclaveIdentityVectorModel().toJSON();
+    ASSERT_FALSE(body.empty());
+    ASSERT_EQ(body.front(), '{');
+    body.insert(1, deeplyNested + ",");
+
+    auto json = enclaveIdentityJsonWithSignature(body);
+    ASSERT_THROW(EnclaveIdentity::parse(json), parser::InvalidExtensionException);
+}

@@ -67,6 +67,13 @@ private:
     rapidjson::Document jsonDocument;
 };
 
+// Iteratively verifies that the JSON value tree rooted at `value` is nested no
+// deeper than `maxDepth`. rapidjson's GenericValue::Accept() serialisation is
+// implemented with native call-stack recursion, so an attacker-controlled value
+// nested arbitrarily deep would exhaust the stack (CWE-674). Callers must run
+// this check before invoking Accept() on untrusted input.
+bool isWithinJsonDepthLimit(const ::rapidjson::Value& value, unsigned int maxDepth);
+
 }}}}} // namespace intel { namespace sgx { namespace dcap { namespace parser { namespace json {
 
 
