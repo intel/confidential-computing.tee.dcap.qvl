@@ -449,7 +449,10 @@ Status sgxAttestationVerifyQuoteEx(const uint8_t* rawQuote, uint32_t quoteSize, 
         if(verificationCollateralInfo && verCollInfoDataObj.isFilled())
         {
             std::vector<uint8_t> verCollInfoVec = verCollInfoDataObj.aggregateDataAndParseToVec();
-            std::memcpy(verificationCollateralInfo, verCollInfoVec.data(), verificationCollateralInfoSize);
+            std::memcpy(verificationCollateralInfo, verCollInfoVec.data(),
+                        std::min({static_cast<size_t>(verificationCollateralInfoSize),
+                                  verCollInfoVec.size(),
+                                  static_cast<size_t>(::constants::VERIFICATION_COLLATERAL_INFO_SIZE_BYTE_LEN)}));
         }
 
         return status;
