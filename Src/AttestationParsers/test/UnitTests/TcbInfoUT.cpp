@@ -1311,6 +1311,27 @@ TEST_F(TcbInfoUT, shouldFailWhenAdvisoryIdIsNotString)
 
 }
 
+TEST_F(TcbInfoUT, getSgxTcbComponentOnV2LevelRoutesToCpuSvnComponents)
+{
+    // V2-parsed TcbLevel never populates _sgxTcbComponents; the singular
+    // getter must route to _cpuSvnComponents (mirroring getSgxTcbComponents())
+    // rather than indexing the empty _sgxTcbComponents vector.
+    auto tcbInfoJson = TcbInfoGenerator::generateTcbInfo();
+    const auto tcbInfo = parser::json::TcbInfo::parse(tcbInfoJson);
+    ASSERT_EQ(tcbInfo.getVersion(), 2);
+    auto iterator = tcbInfo.getTcbLevels().begin();
+    ASSERT_NE(iterator, tcbInfo.getTcbLevels().end());
+
+    for (uint32_t i = 0; i < constants::CPUSVN_BYTE_LEN; i++)
+    {
+        EXPECT_EQ(iterator->getSgxTcbComponent(i).getSvn(), DEFAULT_CPUSVN[i]);
+    }
+
+    // Bounds: index == CPUSVN_BYTE_LEN must throw, not OOB.
+    EXPECT_THROW(iterator->getSgxTcbComponent(constants::CPUSVN_BYTE_LEN),
+                 parser::FormatException);
+}
+
 TEST_F(TcbInfoUT, shouldFailWhenTcbInfoIsNestedTooDeeply)
 {
     // A deeply-nested [tcbInfo] body must be rejected before it reaches the

@@ -984,3 +984,27 @@ TEST_F(TdxTcbInfoV3UT, shouldFailWhenTdxModuleTcbLevelIsNotAnObject)
         EXPECT_EQ(std::string(err.what()), "TDX Module TCB level should be a JSON object");
     }
 }
+
+TEST_F(TdxTcbInfoV3UT, getTcbComponentAccessorsRejectComponentNumberEqualToCpuSvnByteLen)
+{
+    auto tcbInfoJson = TcbInfoGenerator::generateTdxTcbInfo(
+            validTdxTcbInfoV3Template,
+            TcbInfoGenerator::generateTcbLevelV3(validTcbLevelV3Template, validTdxTcbV3));
+
+    const auto tcbInfo = parser::json::TcbInfo::parse(tcbInfoJson);
+    auto iterator = tcbInfo.getTcbLevels().begin();
+
+    // Boundary: componentNumber == CPUSVN_BYTE_LEN must be rejected
+    // (valid indices are 0 .. CPUSVN_BYTE_LEN - 1).
+    EXPECT_THROW(iterator->getSgxTcbComponentSvn(constants::CPUSVN_BYTE_LEN),
+                 parser::FormatException);
+    EXPECT_THROW(iterator->getSgxTcbComponent(constants::CPUSVN_BYTE_LEN),
+                 parser::FormatException);
+    EXPECT_THROW(iterator->getTdxTcbComponent(constants::CPUSVN_BYTE_LEN),
+                 parser::FormatException);
+
+    // Last valid index must still succeed.
+    EXPECT_NO_THROW(iterator->getSgxTcbComponentSvn(constants::CPUSVN_BYTE_LEN - 1));
+    EXPECT_NO_THROW(iterator->getSgxTcbComponent(constants::CPUSVN_BYTE_LEN - 1));
+    EXPECT_NO_THROW(iterator->getTdxTcbComponent(constants::CPUSVN_BYTE_LEN - 1));
+}

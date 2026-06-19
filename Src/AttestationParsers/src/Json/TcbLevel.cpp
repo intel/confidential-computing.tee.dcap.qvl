@@ -115,7 +115,7 @@ bool TcbLevel::operator>(const TcbLevel& other) const
 // Deprecated as a part of TcbInfo version 2 structure. Please use getSgxTcbComponent instead.
 uint32_t TcbLevel::getSgxTcbComponentSvn(uint32_t componentNumber) const
 {
-    if (componentNumber > constants::CPUSVN_BYTE_LEN)
+    if (componentNumber >= constants::CPUSVN_BYTE_LEN)
     {
         std::string err = "Invalid component SVN number [" + std::to_string(componentNumber) +
                           "]. Should be less than " + std::to_string(constants::CPUSVN_BYTE_LEN);
@@ -126,11 +126,19 @@ uint32_t TcbLevel::getSgxTcbComponentSvn(uint32_t componentNumber) const
 
 const TcbComponent& TcbLevel::getSgxTcbComponent(uint32_t componentNumber) const
 {
-    if (componentNumber > constants::CPUSVN_BYTE_LEN)
+    if (componentNumber >= constants::CPUSVN_BYTE_LEN)
     {
         std::string err = "Invalid component SVN number [" + std::to_string(componentNumber) +
                           "]. Should be less than " + std::to_string(constants::CPUSVN_BYTE_LEN);
         LOG_AND_THROW(FormatException, err);
+    }
+    if (_version < TcbInfo::Version::V2)
+    {
+        LOG_AND_THROW(FormatException, "SGX TCB Components is not a valid field in TCB Info V1 structure");
+    }
+    if (_version == TcbInfo::Version::V2)
+    {
+        return _cpuSvnComponents[componentNumber];
     }
     return _sgxTcbComponents[componentNumber];
 }
@@ -151,7 +159,7 @@ const std::vector<TcbComponent>& TcbLevel::getSgxTcbComponents() const
 
 const TcbComponent& TcbLevel::getTdxTcbComponent(uint32_t componentNumber) const
 {
-    if (componentNumber > constants::CPUSVN_BYTE_LEN)
+    if (componentNumber >= constants::CPUSVN_BYTE_LEN)
     {
         std::string err = "Invalid component SVN number [" + std::to_string(componentNumber) +
                           "]. Should be less than " + std::to_string(constants::CPUSVN_BYTE_LEN);
